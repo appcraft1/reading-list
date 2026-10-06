@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "versionCode": 1,
+  "appName": "Reading List",
+  "changeLog": "Rilis perdana aplikasi pencatat daftar bacaan berbasis AI Vision dan auto-crop sampul.",
+  "updateType": "ota"
+}

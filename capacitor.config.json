@@ -1,0 +1,9 @@
+{
+  "appId": "com.appcraft.readinglist",
+  "appName": "Reading List",
+  "webDir": "www",
+  "server": {
+    "cleartext": true,
+    "androidScheme": "https"
+  }
+}

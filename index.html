@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Reading List — Visual Reading Tracker</title>
+  <meta name="description" content="Aplikasi pencatat daftar bacaan dan tontonan pintar berbasis AI Vision. Ekstrak judul, sinopsis, dan sampul otomatis dari screenshot rekomendasi.">
+  <meta name="theme-color" content="#f5f6f9">
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+
+  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       1. BRANDED SPLASH / LOADING SCREEN (CERAH & PREMIUM)
+       ========================================================================= -->
+  <div id="app-splash-screen" class="splash-container">
+    <div class="splash-logo-wrap">
+      <img src="logo.svg" alt="Reading List Logo" class="splash-logo-svg" />
+    </div>
+    <h1 class="splash-app-title">Reading List</h1>
+    <p class="splash-subtitle">Smart Visual Reading Tracker</p>
+    <div class="splash-loader-bar">
+      <div class="splash-loader-progress"></div>
+    </div>
+    <span id="splash-status-text" class="splash-status-text">Memuat koleksi bacaan...</span>
+    <span class="splash-footer-badge">Reading List • Offline-First Cloud</span>
+  </div>
+
+  <!-- =========================================================================
+       2. MAIN APP SHELL
+       ========================================================================= -->
+  <div class="app-shell" id="app-shell">
+    
+    <!-- Top App Bar -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="brand-group">
+          <div class="brand-logo-small">
+            <img src="logo.svg" alt="Icon" />
+          </div>
+          <div>
+            <div class="brand-badge-row">
+              <span class="brand-name">Reading List</span>
+              <span class="pill-chip pill-ai-ready" id="badge-ai-indicator">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Gemini 3.8
+              </span>
+              <span class="pill-chip" id="badge-cloud-indicator" style="background:#f1f5f9; color:#64748b;" title="Status Cloud Database">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                Lokal
+              </span>
+            </div>
+            <span class="brand-subtext" id="header-stats-text">0 item tersimpan</span>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button type="button" class="icon-btn" id="btn-open-settings" aria-label="Pengaturan & API Gemini" title="Pengaturan & API">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Search Bar -->
+      <div class="search-bar-wrap">
+        <svg class="search-icon svg-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="search-input" class="search-input" placeholder="Cari judul manhwa, buku, atau kata kunci..." autocomplete="off">
+        <button type="button" id="btn-clear-search" class="clear-search-btn hidden" aria-label="Hapus Pencarian">&times;</button>
+      </div>
+    </header>
+
+    <!-- FOLDER SHELF (BUKAN CHIP! KARTU RAK VISUAL DENGAN PREMIUM SVG) -->
+    <section class="folders-shelf-section" id="folders-shelf-section">
+      <div class="shelf-header">
+        <h3 class="shelf-title">Rak & Kategori</h3>
+        <span class="shelf-count" id="shelf-count-text">0 Folder</span>
+      </div>
+      <div class="folders-scroll-track" id="folders-scroll-track">
+        <!-- Rendered Dynamically with Premium SVG Icons -->
+      </div>
+    </section>
+
+    <!-- Main Content Container -->
+    <main class="app-main">
+      
+      <!-- DAFTAR BACAAN FEED -->
+      <section class="section-items">
+        <div class="feed-header-row">
+          <div class="feed-title-wrap">
+            <h3 class="feed-title" id="items-section-title">Semua Koleksi</h3>
+            <span class="feed-count" id="items-count-badge">0 Judul</span>
+          </div>
+          <div class="feed-controls-group">
+            <div class="view-mode-toggle" id="view-mode-toggle" role="group" aria-label="Pilih Tampilan Koleksi">
+              <button type="button" class="view-toggle-btn active" id="btn-view-grid" aria-label="Tampilan Grid Poster Lega" title="Tampilan Grid Poster Lega">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+              </button>
+              <button type="button" class="view-toggle-btn" id="btn-view-list" aria-label="Tampilan List Detail" title="Tampilan List Detail">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+            </div>
+            <select id="sort-select" class="sort-select-pill" aria-label="Urutkan Koleksi">
+              <option value="recent">Terbaru</option>
+              <option value="title">Abjad (A-Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Grid Cards Container -->
+        <div class="items-grid" id="items-grid">
+          <!-- Dynamically populated reading bento cards -->
+        </div>
+
+        <!-- Empty State Container -->
+        <div class="empty-state hidden" id="empty-state">
+          <div class="empty-state-icon">
+            <svg class="svg-icon icon-lg" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+          </div>
+          <h4 class="empty-state-title">Belum Ada Bacaan di Rak Ini</h4>
+          <p class="empty-state-desc">Scan screenshot daftar rekomendasi atau tambahkan judul untuk mulai menyusun koleksi lo.</p>
+          <button type="button" class="btn btn-primary" id="btn-empty-scan">
+            <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Scan Screenshot Sekarang
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- =========================================================================
+         3. FLOATING BOTTOM ACTION DOCK (BERSIH: KOLEKSI - SCAN SS - RAK FOLDER)
+         ========================================================================= -->
+    <nav class="bottom-dock" id="bottom-dock">
+      <button type="button" class="dock-item active" id="dock-btn-home" aria-label="Koleksi Home">
+        <svg class="svg-icon" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Koleksi</span>
+      </button>
+
+      <!-- Center Hero Action: Scan SS -->
+      <button type="button" class="dock-hero-btn" id="dock-btn-scan" aria-label="Scan Screenshot">
+        <div class="dock-hero-glow"></div>
+        <div class="dock-hero-inner">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <span class="dock-hero-label">Scan SS</span>
+      </button>
+
+      <!-- Tab Statistik & Rekap -->
+      <button type="button" class="dock-item" id="dock-btn-stats" aria-label="Statistik & Rekap">
+        <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Statistik</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- =========================================================================
+       4. MODAL: AI SCREENSHOT SCANNER (GEMINI 3.8 FLASH + CANVAS AUTO-CROP)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-scanner">
+    <div class="modal-card modal-fullscreen-mobile">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </div>
+          <div>
+            <h3 class="modal-title">AI Screenshot Scanner</h3>
+            <span class="modal-subtitle">Auto-crop sampul & ekstrak daftar via Gemini 3.8</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-scanner" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- Dropzone State (Input file 100% hidden, no raw browser button!) -->
+        <div class="scanner-dropzone" id="scanner-dropzone">
+          <input type="file" id="scanner-file-input" accept="image/*" class="file-hidden-input">
+          <div class="dropzone-inner">
+            <div class="dropzone-icon-box">
+              <svg class="svg-icon icon-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <h4 class="dropzone-title">Upload Screenshot Rekomendasi</h4>
+            <p class="dropzone-desc">Ketuk kotak ini untuk pilih gambar dari galeri, atau drag & drop file ke sini (Bisa juga pencet <strong>Ctrl + V</strong> untuk paste screenshot).</p>
+            <div class="dropzone-tags">
+              <span class="tag-pill">Top 10 Manhwa</span>
+              <span class="tag-pill">Rekomendasi Novel</span>
+              <span class="tag-pill">Watchlist Anime</span>
+            </div>
+            <button type="button" class="btn btn-primary mt-3" id="btn-select-image-file">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+              Pilih dari Galeri
+            </button>
+          </div>
+        </div>
+
+        <!-- Processing State -->
+        <div class="scanner-processing hidden" id="scanner-processing">
+          <div class="scan-preview-canvas-wrap">
+            <img id="scan-preview-img" src="" alt="Preview Scan" />
+            <div class="scan-laser-line"></div>
+          </div>
+          <div class="processing-meta">
+            <div class="spinner-neon"></div>
+            <h4 class="processing-title">Gemini 3.8 Sedang Membaca Screenshot...</h4>
+            <p class="processing-desc" id="scan-status-ticker">Mengekstrak judul, deskripsi, dan memotong gambar cover...</p>
+          </div>
+        </div>
+
+        <!-- Results Review State -->
+        <div class="scanner-results hidden" id="scanner-results">
+          <div class="results-toolbar">
+            <div>
+              <span class="results-counter" id="results-count-text">Ditemukan 0 judul</span>
+              <p class="results-subtext">Semua sampul otomatis dipotong dari gambar asli. Lo bisa edit judul sebelum disimpan.</p>
+            </div>
+            <div class="results-folder-select-wrap">
+              <label for="results-target-folder" class="field-label-sm">Simpan ke Folder:</label>
+              <select id="results-target-folder" class="input-select-sm">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+          </div>
+
+          <div class="results-list" id="results-list">
+            <!-- Dynamic result cards with cropped cover, title, description -->
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" id="scanner-footer">
+        <button type="button" class="btn btn-ghost" id="btn-cancel-scan">Batal</button>
+        <button type="button" class="btn btn-primary hidden" id="btn-save-scanned-items">
+          <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Simpan Semua ke Folder
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       5. MODAL: EDIT ITEM BACAAN (Detail Modal Ringkas & Bersih)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-item-detail">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="item-modal-title">Detail Bacaan</h3>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-item-detail" aria-label="Tutup">&times;</button>
+      </div>
+
+      <form id="form-item-detail" class="modal-body form-grid">
+        <input type="hidden" id="item-id-hidden">
+        
+        <!-- Cover Preview & Change -->
+        <div class="form-group-cover">
+          <div class="cover-preview-box" id="cover-preview-box">
+            <img id="detail-cover-img" src="" alt="Cover Sampul" class="hidden">
+            <div class="cover-placeholder" id="detail-cover-placeholder">
+              <svg class="svg-icon icon-lg" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+              <span>Ikon Vektor Sampul</span>
+            </div>
+          </div>
+          <div class="cover-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-change-cover">Ganti Foto Sampul</button>
+            <input type="file" id="cover-file-input" accept="image/*" class="file-hidden-input">
+            <button type="button" class="btn btn-ghost btn-sm text-danger hidden" id="btn-remove-cover">Hapus Sampul</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="item-title-input" class="field-label">Judul Karya <span class="text-danger">*</span></label>
+          <input type="text" id="item-title-input" class="form-input" placeholder="Contoh: Solo Leveling" required>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="item-folder-select" class="field-label">Folder / Rak</label>
+            <select id="item-folder-select" class="form-select">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="item-status-select" class="field-label">Status</label>
+            <select id="item-status-select" class="form-select">
+              <option value="plan">Ingin Dibaca</option>
+              <option value="reading">Sedang Dibaca</option>
+              <option value="completed">Selesai</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="item-desc-input" class="field-label">Deskripsi / Sinopsis Singkat</label>
+          <textarea id="item-desc-input" class="form-textarea" rows="3" placeholder="Sinopsis cerita atau catatan kenapa ingin dibaca..."></textarea>
+        </div>
+
+        <div class="modal-footer pt-3">
+          <button type="button" class="btn btn-ghost text-danger hidden" id="btn-delete-item">Hapus</button>
+          <div class="ml-auto flex-gap">
+            <button type="button" class="btn btn-ghost" id="btn-cancel-item">Batal</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-item">Simpan</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       6. MODAL: FOLDER BARU / EDIT FOLDER
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-folder">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="folder-modal-title">Folder Baru</h3>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-folder" aria-label="Tutup">&times;</button>
+      </div>
+
+      <form id="form-folder" class="modal-body form-grid">
+        <input type="hidden" id="folder-id-hidden">
+
+        <div class="form-group">
+          <label for="folder-name-input" class="field-label">Nama Folder <span class="text-danger">*</span></label>
+          <input type="text" id="folder-name-input" class="form-input" placeholder="Misal: Top 10 Manhwa Action" required>
+        </div>
+
+        <div class="form-group">
+          <label class="field-label">Ikon & Tema Folder</label>
+          <div class="color-palette-picker" id="folder-color-picker">
+            <button type="button" class="color-dot active" data-color="flame" style="--c: #f43f5e" title="Api / Action"></button>
+            <button type="button" class="color-dot" data-color="book" style="--c: #4f46e5" title="Buku / Novel"></button>
+            <button type="button" class="color-dot" data-color="film" style="--c: #9333ea" title="Film / Anime"></button>
+            <button type="button" class="color-dot" data-color="leaf" style="--c: #059669" title="Santai / Slice of Life"></button>
+            <button type="button" class="color-dot" data-color="star" style="--c: #d97706" title="Favorit"></button>
+          </div>
+        </div>
+
+        <div class="modal-footer pt-3">
+          <button type="button" class="btn btn-ghost text-danger hidden" id="btn-delete-folder">Hapus Folder</button>
+          <div class="ml-auto flex-gap">
+            <button type="button" class="btn btn-ghost" id="btn-cancel-folder">Batal</button>
+            <button type="submit" class="btn btn-primary" id="btn-save-folder">Simpan Folder</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       7. MODAL: PENGATURAN & TRAINING API GEMINI 3.8
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-settings">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Pengaturan & Gemini AI</h3>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-settings" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="modal-body form-grid">
+        
+        <!-- Gemini 3.8 Flash Box -->
+        <div class="settings-box">
+          <div class="settings-box-header">
+            <div class="pill-chip pill-ai-ready">Gemini 3.8 Flash</div>
+            <h4 class="settings-box-title">Google Gemini Vision Engine</h4>
+          </div>
+          <p class="settings-box-desc">
+            Sistem telah diperbarui menggunakan model resmi <strong>gemini-3.8-flash</strong> dengan instruksi sistem (trained prompt) untuk mengekstrak judul, deskripsi, dan mendeteksi kotak cover dari screenshot rekomendasi.
+            <br>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" class="link-external" style="color:var(--primary);font-weight:700;display:inline-block;margin-top:6px;">Dapatkan API Key Gratis di Google AI Studio &rarr;</a>
+          </p>
+          <div class="form-group">
+            <label for="settings-gemini-key" class="field-label">API Key Gemini Anda</label>
+            <input type="password" id="settings-gemini-key" class="form-input" placeholder="AIzaSy...">
+            <span class="field-hint">Tersimpan aman di local HP lo (Offline-First).</span>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-save-gemini-key">Simpan & Aktifkan Key</button>
+        </div>
+
+        <!-- Google Sheets Cloud Database Box -->
+        <div class="settings-box">
+          <div class="settings-box-header">
+            <div class="pill-chip" id="sheets-status-badge" style="background:#f1f5f9; color:#64748b;">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+              Belum Terhubung
+            </div>
+            <h4 class="settings-box-title">Database Google Sheets (Cloud Sync)</h4>
+          </div>
+          <p class="settings-box-desc">
+            Hubungkan aplikasi ke Google Spreadsheet pribadi Anda. Semua koleksi dan rak bacaan akan otomatis tersinkronisasi di cloud secara gratis tanpa biaya server.
+          </p>
+          <div class="form-group">
+            <label for="settings-sheets-url" class="field-label">URL Web App Google Apps Script</label>
+            <input type="url" id="settings-sheets-url" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+            <span class="field-hint">Dapatkan URL dari deploy Web App spreadsheet Google Anda.</span>
+          </div>
+          <div class="flex-gap mt-2 flex-wrap">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-sheets-url">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Simpan & Hubungkan
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-push-sheets" title="Unggah data lokal ke Google Sheet">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Kirim ke Sheet
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-pull-sheets" title="Unduh data dari Google Sheet ke HP">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Tarik dari Sheet
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-sheets-guide">
+              Panduan Setup & Script
+            </button>
+          </div>
+
+          <!-- Panduan Setup Collapsible -->
+          <div class="sheets-guide-box hidden" id="sheets-guide-box" style="margin-top:14px; padding:14px; background:#ffffff; border:1px solid var(--border-card); border-radius:var(--radius-sm); font-size:12px; line-height:1.55;">
+            <div style="font-weight:700; margin-bottom:6px; color:var(--text-main);">Cara Menghubungkan Google Sheet (3 Langkah):</div>
+            <ol style="padding-left:18px; color:var(--text-muted); display:flex; flex-direction:column; gap:5px;">
+              <li>Buat spreadsheet baru di <a href="https://sheets.new" target="_blank" rel="noreferrer" style="color:var(--primary); font-weight:700;">sheets.new</a>.</li>
+              <li>Klik menu <strong>Extensions (Ekstensi) &gt; Apps Script</strong>.</li>
+              <li>Hapus kode bawaan, lalu tempel kode dari tombol di bawah.</li>
+              <li>Klik <strong>Deploy &gt; New deployment</strong> &gt; pilih <strong>Web app</strong> &gt; ubah <em>Who has access</em> ke <strong>Anyone</strong>.</li>
+              <li>Salin URL Web App yang muncul, lalu tempel ke kolom di atas dan klik <strong>Simpan & Hubungkan</strong>!</li>
+            </ol>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" id="btn-copy-gas-script" style="width:100%;">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              Salin Kode Script Apps Script (Siap Pakai)
+            </button>
+          </div>
+        </div>
+
+        <!-- Data Backup & Restore -->
+        <div class="settings-box">
+          <h4 class="settings-box-title">Cadangkan & Pulihkan Data</h4>
+          <p class="settings-box-desc">Seluruh daftar bacaan tersimpan aman di HP lo. Lo bisa ekspor data ini sebagai file JSON kapan saja.</p>
+          <div class="flex-gap mt-2">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-export-json">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Ekspor JSON
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-trigger-import-json">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Impor JSON
+            </button>
+            <input type="file" id="import-json-file" accept=".json" class="file-hidden-input">
+          </div>
+        </div>
+
+        <!-- Reset Sample Data -->
+        <div class="settings-box">
+          <h4 class="settings-box-title">Data Koleksi</h4>
+          <p class="settings-box-desc">Reset atau muat ulang koleksi contoh bacaan.</p>
+          <div class="flex-gap mt-2">
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-load-sample-data">Muat Contoh Manhwa</button>
+            <button type="button" class="btn btn-ghost btn-sm text-danger" id="btn-reset-all-data">Reset Semua Data</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary ml-auto" id="btn-done-settings">Selesai</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       8. MODAL: STATISTIK & REKAP BACAAN (BENTO STATS & INSIGHTS)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-stats">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge" style="background:#eef2ff; color:#4f46e5;">
+            <svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </div>
+          <div>
+            <h3 class="modal-title">Statistik & Rekap Bacaan</h3>
+            <span class="modal-subtitle">Wawasan progres & distribusi koleksi lo</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-stats" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="modal-body form-grid">
+        <!-- 3 Bento Stat Cards -->
+        <div class="stats-bento-grid">
+          <div class="stats-card">
+            <span class="stats-card-label">Total Koleksi</span>
+            <div class="stats-card-num" id="stat-total-items">0</div>
+            <span class="stats-card-sub" id="stat-total-sub">0 folder aktif</span>
+          </div>
+          <div class="stats-card stats-card-highlight">
+            <span class="stats-card-label">Sedang Dibaca</span>
+            <div class="stats-card-num text-primary" id="stat-reading-items">0</div>
+            <span class="stats-card-sub" id="stat-reading-percent">0% dari total</span>
+          </div>
+          <div class="stats-card stats-card-success">
+            <span class="stats-card-label">Tamat / Selesai</span>
+            <div class="stats-card-num text-success" id="stat-completed-items">0</div>
+            <span class="stats-card-sub" id="stat-completed-percent">0% tamat</span>
+          </div>
+        </div>
+
+        <!-- Progres Bar Multistatus -->
+        <div class="stats-box">
+          <div class="stats-box-header">
+            <h4 class="stats-box-title">Status Progres Bacaan</h4>
+            <span class="stats-badge-ratio" id="stat-ratio-text">0/0 Selesai</span>
+          </div>
+          <div class="stats-progress-multibar" id="stats-progress-bar">
+            <div class="progress-segment seg-completed" id="prog-seg-completed" style="width: 0%" title="Selesai"></div>
+            <div class="progress-segment seg-reading" id="prog-seg-reading" style="width: 0%" title="Sedang Dibaca"></div>
+            <div class="progress-segment seg-plan" id="prog-seg-plan" style="width: 100%" title="Ingin Dibaca"></div>
+          </div>
+          <div class="stats-legend-row">
+            <div class="legend-item"><span class="legend-dot dot-completed"></span> Selesai (<span id="legend-count-completed">0</span>)</div>
+            <div class="legend-item"><span class="legend-dot dot-reading"></span> Sedang Baca (<span id="legend-count-reading">0</span>)</div>
+            <div class="legend-item"><span class="legend-dot dot-plan"></span> Wishlist (<span id="legend-count-plan">0</span>)</div>
+          </div>
+        </div>
+
+        <!-- Kategori / Folder Breakdown -->
+        <div class="stats-box">
+          <div class="stats-box-header">
+            <h4 class="stats-box-title">Distribusi per Rak & Kategori</h4>
+          </div>
+          <div class="stats-folders-list" id="stats-folders-breakdown">
+            <!-- Dynamically populated folder distribution bars -->
+          </div>
+        </div>
+
+        <!-- Pencapaian Bacaan (Milestone Badges) -->
+        <div class="stats-box">
+          <div class="stats-box-header">
+            <h4 class="stats-box-title">Pencapaian Koleksi</h4>
+          </div>
+          <div class="stats-badges-grid" id="stats-badges-grid">
+            <!-- Dynamically populated achievement pills -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-filter-reading-now">
+          <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          Filter Sedang Dibaca
+        </button>
+        <button type="button" class="btn btn-primary ml-auto" id="btn-done-stats">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Core Scripts -->
+  <script src="updater.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

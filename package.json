@@ -1,0 +1,21 @@
+{
+  "name": "reading-list-app",
+  "version": "1.0.0",
+  "description": "Aplikasi Pencatat Daftar Bacaan Berbasis AI Vision",
+  "main": "app.js",
+  "scripts": {
+    "build": "node build.js",
+    "cap:add": "node build.js && npx cap add android",
+    "cap:sync": "node build.js && npx cap sync",
+    "cap:open": "node build.js && npx cap open android"
+  },
+  "keywords": ["reading", "manhwa", "vision", "ai", "capacitor", "android"],
+  "author": "App Craft",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  }
+}

@@ -3,7 +3,16 @@
   "appName": "Reading List",
   "webDir": "www",
   "server": {
+    "url": "https://appcraft1.github.io/reading-list/",
     "cleartext": true,
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowNavigation": [
+      "appcraft1.github.io",
+      "*.github.io",
+      "raw.githubusercontent.com",
+      "script.google.com",
+      "*.google.com",
+      "generativelanguage.googleapis.com"
+    ]
   }
 }

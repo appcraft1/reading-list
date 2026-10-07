@@ -1,8 +1,8 @@
 /**
- * SW.JS — Service Worker Offline Cache
+ * SW.JS — Service Worker Network-First (Live Cloud OTA + Offline Cache Fallback)
  */
 
-const CACHE_NAME = 'reading-list-v1';
+const CACHE_NAME = 'reading-list-v1.1.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -11,7 +11,8 @@ const ASSETS_TO_CACHE = [
   './updater.js',
   './version.json',
   './manifest.json',
-  './logo.svg'
+  './logo.svg',
+  './mascot.jpg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -36,17 +37,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Network-First: Ambil update terbaru dari Cloud jika online, fallback ke cache jika offline
 self.addEventListener('fetch', (event) => {
-  // Hanya intercept GET request
   if (event.request.method !== 'GET') return;
 
+  // Jangan cache request ke Google Script API atau Google Gemini API
+  const url = event.request.url;
+  if (url.includes('script.google.com') || url.includes('generativelanguage.googleapis.com')) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        // Cache dynamically if valid response
+    fetch(event.request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -54,10 +57,15 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      }).catch(() => {
-        // Offline fallback
-        return caches.match('./index.html');
-      });
-    })
+      })
+      .catch(() => {
+        // Jika offline, ambil dari cache
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) return cachedResponse;
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
+      })
   );
 });

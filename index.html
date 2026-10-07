@@ -11,10 +11,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="logo.svg">
 
-  <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+  <!-- Google Fonts: Inter, Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -55,7 +55,7 @@
                 <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 Gemini 3.8
               </span>
-              <span class="pill-chip" id="badge-cloud-indicator" style="background:#f1f5f9; color:#64748b;" title="Status Cloud Database">
+              <span class="pill-chip" id="badge-cloud-indicator" style="background:#f1f5f9; color:#64748b;" title="Status Cloud Database (Klik untuk Sync)">
                 <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
                 Lokal
               </span>
@@ -64,6 +64,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <button type="button" class="icon-btn" id="btn-quick-sync" aria-label="Sinkronkan Google Sheets" title="Sinkronkan Google Sheets">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+          </button>
           <button type="button" class="icon-btn" id="btn-open-settings" aria-label="Pengaturan & API Gemini" title="Pengaturan & API">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
           </button>
@@ -100,6 +103,10 @@
             <span class="feed-count" id="items-count-badge">0 Judul</span>
           </div>
           <div class="feed-controls-group">
+            <button type="button" class="btn-feed-add" id="btn-add-manual-item" title="Tambah Bacaan Baru Manual">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>+ Judul</span>
+            </button>
             <div class="view-mode-toggle" id="view-mode-toggle" role="group" aria-label="Pilih Tampilan Koleksi">
               <button type="button" class="view-toggle-btn active" id="btn-view-grid" aria-label="Tampilan Grid Poster Lega" title="Tampilan Grid Poster Lega">
                 <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
@@ -126,23 +133,48 @@
             <svg class="svg-icon icon-lg" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
           </div>
           <h4 class="empty-state-title">Belum Ada Bacaan di Rak Ini</h4>
-          <p class="empty-state-desc">Scan screenshot daftar rekomendasi atau tambahkan judul untuk mulai menyusun koleksi lo.</p>
-          <button type="button" class="btn btn-primary" id="btn-empty-scan">
-            <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            Scan Screenshot Sekarang
-          </button>
+          <p class="empty-state-desc">Scan banyak screenshot daftar rekomendasi atau tambahkan judul manual untuk mulai menyusun koleksi.</p>
+          <div class="empty-state-buttons">
+            <button type="button" class="btn btn-primary" id="btn-empty-scan">
+              <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Scan Screenshot
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-empty-add-manual">
+              <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Tambah Manual
+            </button>
+          </div>
         </div>
       </section>
 
     </main>
 
+    <!-- Floating Background Scan Progress Banner -->
+    <div class="floating-scan-banner hidden" id="floating-scan-banner">
+      <div class="scan-banner-left">
+        <div class="spinner-neon-sm" id="scan-banner-spinner"></div>
+        <div class="scan-banner-text">
+          <span class="scan-banner-title" id="scan-banner-title">Memindai 1/1 Foto...</span>
+          <span class="scan-banner-sub" id="scan-banner-sub">Bisa diminimize & ganti APK lain tanpa batal</span>
+        </div>
+      </div>
+      <div class="scan-banner-right">
+        <button type="button" class="btn btn-primary btn-xs" id="btn-open-scan-banner">Lihat Hasil</button>
+      </div>
+    </div>
+
     <!-- =========================================================================
-         3. FLOATING BOTTOM ACTION DOCK (BERSIH: KOLEKSI - SCAN SS - RAK FOLDER)
+         3. FLOATING BOTTOM ACTION DOCK (MELAYANG & LEGA DI ATAS TOMBOL HP)
          ========================================================================= -->
     <nav class="bottom-dock" id="bottom-dock">
       <button type="button" class="dock-item active" id="dock-btn-home" aria-label="Koleksi Home">
         <svg class="svg-icon" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span>Koleksi</span>
+      </button>
+
+      <button type="button" class="dock-item" id="dock-btn-add" aria-label="Tambah Judul Manual">
+        <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        <span>Tambah</span>
       </button>
 
       <!-- Center Hero Action: Scan SS -->
@@ -164,7 +196,7 @@
   </div>
 
   <!-- =========================================================================
-       4. MODAL: AI SCREENSHOT SCANNER (GEMINI 3.8 FLASH + CANVAS AUTO-CROP)
+       4. MODAL: AI SCREENSHOT SCANNER (MULTI-PHOTO BATCH + MINIMIZE)
        ========================================================================= -->
   <div class="modal-backdrop hidden" id="modal-scanner">
     <div class="modal-card modal-fullscreen-mobile">
@@ -175,7 +207,7 @@
           </div>
           <div>
             <h3 class="modal-title">AI Screenshot Scanner</h3>
-            <span class="modal-subtitle">Auto-crop sampul & ekstrak daftar via Gemini 3.8</span>
+            <span class="modal-subtitle">Auto-crop sampul & ekstrak daftar (bisa banyak foto sekaligus)</span>
           </div>
         </div>
         <button type="button" class="icon-btn close-modal-btn" id="btn-close-scanner" aria-label="Tutup">&times;</button>
@@ -183,28 +215,28 @@
 
       <div class="modal-body">
         
-        <!-- Dropzone State (Input file 100% hidden, no raw browser button!) -->
+        <!-- Dropzone State (Input file 100% hidden, mendukung multi-file) -->
         <div class="scanner-dropzone" id="scanner-dropzone">
-          <input type="file" id="scanner-file-input" accept="image/*" class="file-hidden-input">
+          <input type="file" id="scanner-file-input" accept="image/*" multiple class="file-hidden-input">
           <div class="dropzone-inner">
             <div class="dropzone-icon-box">
               <svg class="svg-icon icon-lg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             </div>
             <h4 class="dropzone-title">Upload Screenshot Rekomendasi</h4>
-            <p class="dropzone-desc">Ketuk kotak ini untuk pilih gambar dari galeri, atau drag & drop file ke sini (Bisa juga pencet <strong>Ctrl + V</strong> untuk paste screenshot).</p>
+            <p class="dropzone-desc">Ketuk untuk pilih <strong>1 atau banyak foto sekaligus</strong> dari galeri. Proses bisa diminimize dan tetap jalan saat ganti APK lain tanpa batal.</p>
             <div class="dropzone-tags">
-              <span class="tag-pill">Top 10 Manhwa</span>
-              <span class="tag-pill">Rekomendasi Novel</span>
-              <span class="tag-pill">Watchlist Anime</span>
+              <span class="tag-pill">Bisa Banyak Foto</span>
+              <span class="tag-pill">Bisa Diminimize</span>
+              <span class="tag-pill">Auto Crop Sampul</span>
             </div>
             <button type="button" class="btn btn-primary mt-3" id="btn-select-image-file">
               <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-              Pilih dari Galeri
+              Pilih Foto dari Galeri
             </button>
           </div>
         </div>
 
-        <!-- Processing State -->
+        <!-- Processing State (Dengan tombol Minimize / Jalankan di Latar Belakang) -->
         <div class="scanner-processing hidden" id="scanner-processing">
           <div class="scan-preview-canvas-wrap">
             <img id="scan-preview-img" src="" alt="Preview Scan" />
@@ -212,35 +244,52 @@
           </div>
           <div class="processing-meta">
             <div class="spinner-neon"></div>
-            <h4 class="processing-title">Gemini 3.8 Sedang Membaca Screenshot...</h4>
+            <h4 class="processing-title" id="scan-processing-title">Gemini 3.8 Sedang Membaca Screenshot...</h4>
             <p class="processing-desc" id="scan-status-ticker">Mengekstrak judul, deskripsi, dan memotong gambar cover...</p>
+            
+            <div class="queue-progress-bar-wrap" id="queue-progress-wrap">
+              <div class="queue-progress-bar" id="queue-progress-bar" style="width: 0%"></div>
+            </div>
+            <span class="queue-count-badge" id="queue-count-badge">Foto 1 dari 1</span>
+
+            <button type="button" class="btn btn-secondary btn-sm mt-3" id="btn-minimize-scanner">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+              Jalankan di Latar Belakang (Minimize)
+            </button>
+            <span class="field-hint text-center" style="margin-top:6px;">Proses tetap aman berjalan jika lo ganti aplikasi lain atau buka koleksi.</span>
           </div>
         </div>
 
-        <!-- Results Review State -->
+        <!-- Results Review State (Bisa diedit, ditambah judul baru, dan dihapus) -->
         <div class="scanner-results hidden" id="scanner-results">
           <div class="results-toolbar">
             <div>
               <span class="results-counter" id="results-count-text">Ditemukan 0 judul</span>
-              <p class="results-subtext">Semua sampul otomatis dipotong dari gambar asli. Lo bisa edit judul sebelum disimpan.</p>
+              <p class="results-subtext">Foto & data bisa lo edit, tambah judul baru, atau hapus sebelum disimpan.</p>
             </div>
-            <div class="results-folder-select-wrap">
-              <label for="results-target-folder" class="field-label-sm">Simpan ke Folder:</label>
-              <select id="results-target-folder" class="input-select-sm">
-                <!-- Populated dynamically -->
-              </select>
+            <div class="results-actions-right">
+              <div class="results-folder-select-wrap">
+                <label for="results-target-folder" class="field-label-sm">Folder:</label>
+                <select id="results-target-folder" class="input-select-sm">
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-add-scan-result">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                + Judul Baru
+              </button>
             </div>
           </div>
 
           <div class="results-list" id="results-list">
-            <!-- Dynamic result cards with cropped cover, title, description -->
+            <!-- Dynamic result cards with cropped cover, title, description, and action buttons -->
           </div>
         </div>
 
       </div>
 
       <div class="modal-footer" id="scanner-footer">
-        <button type="button" class="btn btn-ghost" id="btn-cancel-scan">Batal</button>
+        <button type="button" class="btn btn-ghost" id="btn-cancel-scan">Tutup / Batal</button>
         <button type="button" class="btn btn-primary hidden" id="btn-save-scanned-items">
           <svg class="svg-icon icon-sm" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           Simpan Semua ke Folder
@@ -386,6 +435,45 @@
             <span class="field-hint">Tersimpan aman di local HP lo (Offline-First).</span>
           </div>
           <button type="button" class="btn btn-primary btn-sm" id="btn-save-gemini-key">Simpan & Aktifkan Key</button>
+        </div>
+
+        <!-- Profil Pengguna & Multi-User Box -->
+        <div class="settings-box">
+          <div class="settings-box-header">
+            <div class="pill-chip" id="profile-role-badge" style="background:#eef2ff; color:#4f46e5;">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Mode Pribadi
+            </div>
+            <h4 class="settings-box-title">Profil & Multi-User (1 Database)</h4>
+          </div>
+          <p class="settings-box-desc">
+            Dua orang atau lebih dapat memakai URL Google Sheet yang sama. Data lo dan teman lo tetap terpisah otomatis dan tidak saling menimpa.
+          </p>
+          <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap;">
+            <div class="form-group" style="flex:1; min-width:140px;">
+              <label for="settings-user-name" class="field-label">Nama Pengguna</label>
+              <input type="text" id="settings-user-name" class="form-input" placeholder="Misal: Asep">
+            </div>
+            <div class="form-group" style="flex:1; min-width:140px;">
+              <label for="settings-user-id" class="field-label">ID Akun (Unik)</label>
+              <div style="display:flex; gap:6px;">
+                <input type="text" id="settings-user-id" class="form-input" placeholder="user_asep">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-random-user-id" title="Acak ID Baru" style="flex-shrink:0;">🎲 Acak</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group mt-2">
+            <label for="settings-user-role" class="field-label">Peran / Hak Akses Database</label>
+            <select id="settings-user-role" class="form-select">
+              <option value="pribadi">Pengguna Pribadi (Hanya menampilkan koleksi saya)</option>
+              <option value="admin">Admin / Perpustakaan Bersama (Akses semua data anggota)</option>
+            </select>
+            <span class="field-hint">Pilih "Pengguna Pribadi" agar data tidak bercampur dengan teman lo.</span>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm mt-2" id="btn-save-profile">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Simpan Profil Pengguna
+          </button>
         </div>
 
         <!-- Google Sheets Cloud Database Box -->

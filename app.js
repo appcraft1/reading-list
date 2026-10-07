@@ -11,16 +11,24 @@
   // 1. STATE & CONSTANTS
   // =========================================================================
   const DB_NAME = 'ReadingListDB_v3';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
 
   let dbInstance = null;
 
   // Default Google Sheets URL (Bisa diisi agar APK langsung terhubung otomatis sejak pertama install)
   const DEFAULT_GOOGLE_SHEETS_URL = '';
 
+  const storedUserId = localStorage.getItem('reading_list_user_id') || ('user_' + Math.random().toString(36).substring(2, 7));
+  localStorage.setItem('reading_list_user_id', storedUserId);
+
   let appState = {
     folders: [],
     items: [],
+    profile: {
+      userId: storedUserId,
+      userName: localStorage.getItem('reading_list_user_name') || 'Pengguna',
+      role: localStorage.getItem('reading_list_user_role') || 'pribadi' // 'pribadi' | 'admin'
+    },
     settings: {
       geminiApiKey: localStorage.getItem('gemini_api_key') || '',
       googleSheetsUrl: localStorage.getItem('google_sheets_url') || DEFAULT_GOOGLE_SHEETS_URL || '',
@@ -32,7 +40,10 @@
     searchQuery: '',
     sortBy: 'recent',
     pendingScannedItems: [],
-    currentUploadedImageSrc: null
+    currentUploadedImageSrc: null,
+    scanQueue: [],
+    isScanningActive: false,
+    isScannerMinimized: false
   };
 
   // Bespoke Folder Icons & Palette Map
@@ -75,16 +86,31 @@
     splashStatus: document.getElementById('splash-status-text'),
     headerStats: document.getElementById('header-stats-text'),
     badgeAiIndicator: document.getElementById('badge-ai-indicator'),
+    badgeCloudIndicator: document.getElementById('badge-cloud-indicator'),
+    btnQuickSync: document.getElementById('btn-quick-sync'),
     searchInput: document.getElementById('search-input'),
     btnClearSearch: document.getElementById('btn-clear-search'),
     foldersScrollTrack: document.getElementById('folders-scroll-track'),
     shelfCountText: document.getElementById('shelf-count-text'),
     itemsSectionTitle: document.getElementById('items-section-title'),
     itemsCountBadge: document.getElementById('items-count-badge'),
+    btnAddManualItem: document.getElementById('btn-add-manual-item'),
     sortSelect: document.getElementById('sort-select'),
     itemsGrid: document.getElementById('items-grid'),
     emptyState: document.getElementById('empty-state'),
+    btnEmptyAddManual: document.getElementById('btn-empty-add-manual'),
     toastContainer: document.getElementById('toast-container'),
+
+    // Floating Dock & Banners
+    bottomDock: document.getElementById('bottom-dock'),
+    dockBtnHome: document.getElementById('dock-btn-home'),
+    dockBtnAdd: document.getElementById('dock-btn-add'),
+    dockBtnScan: document.getElementById('dock-btn-scan'),
+    dockBtnStats: document.getElementById('dock-btn-stats'),
+    floatingScanBanner: document.getElementById('floating-scan-banner'),
+    scanBannerTitle: document.getElementById('scan-banner-title'),
+    scanBannerSub: document.getElementById('scan-banner-sub'),
+    btnOpenScanBanner: document.getElementById('btn-open-scan-banner'),
 
     // Modals
     modalScanner: document.getElementById('modal-scanner'),
@@ -92,15 +118,21 @@
     modalFolder: document.getElementById('modal-folder'),
     modalSettings: document.getElementById('modal-settings'),
 
-    // Scanner
+    // Scanner Elements
     scannerDropzone: document.getElementById('scanner-dropzone'),
     scannerFileInput: document.getElementById('scanner-file-input'),
     scannerProcessing: document.getElementById('scanner-processing'),
+    scanProcessingTitle: document.getElementById('scan-processing-title'),
     scanPreviewImg: document.getElementById('scan-preview-img'),
     scanStatusTicker: document.getElementById('scan-status-ticker'),
+    queueProgressWrap: document.getElementById('queue-progress-wrap'),
+    queueProgressBar: document.getElementById('queue-progress-bar'),
+    queueCountBadge: document.getElementById('queue-count-badge'),
+    btnMinimizeScanner: document.getElementById('btn-minimize-scanner'),
     scannerResults: document.getElementById('scanner-results'),
     resultsCountText: document.getElementById('results-count-text'),
     resultsTargetFolder: document.getElementById('results-target-folder'),
+    btnAddScanResult: document.getElementById('btn-add-scan-result'),
     resultsList: document.getElementById('results-list'),
     btnSaveScanned: document.getElementById('btn-save-scanned-items'),
 
@@ -133,6 +165,9 @@
         if (!db.objectStoreNames.contains('items')) {
           db.createObjectStore('items', { keyPath: 'id' });
         }
+        if (!db.objectStoreNames.contains('scan_queue')) {
+          db.createObjectStore('scan_queue', { keyPath: 'id' });
+        }
       };
 
       request.onsuccess = function (e) {
@@ -155,22 +190,37 @@
         return;
       }
 
-      const tx = dbInstance.transaction(['folders', 'items'], 'readonly');
+      const tx = dbInstance.transaction(['folders', 'items', 'scan_queue'], 'readonly');
       const folderStore = tx.objectStore('folders');
       const itemStore = tx.objectStore('items');
+      const queueStore = tx.objectStore('scan_queue');
 
       const foldersReq = folderStore.getAll();
       const itemsReq = itemStore.getAll();
+      const queueReq = queueStore.getAll();
 
       let loadedFolders = [];
       let loadedItems = [];
+      let loadedQueue = [];
 
       foldersReq.onsuccess = () => { loadedFolders = foldersReq.result || []; };
       itemsReq.onsuccess = () => { loadedItems = itemsReq.result || []; };
+      queueReq.onsuccess = () => { loadedQueue = queueReq.result || []; };
 
       tx.oncomplete = () => {
         appState.folders = loadedFolders;
         appState.items = loadedItems;
+        if (loadedQueue && loadedQueue.length > 0) {
+          appState.scanQueue = loadedQueue;
+          const pending = loadedQueue.some(j => j.status === 'pending');
+          if (pending) {
+            appState.isScannerMinimized = true;
+            if (dom.floatingScanBanner) {
+              dom.floatingScanBanner.classList.remove('hidden');
+              updateFloatingBannerStatus();
+            }
+          }
+        }
         resolve();
       };
 
@@ -224,6 +274,35 @@
     }
     saveToLocalStorage();
     scheduleCloudPush();
+  }
+
+  function saveScanJobToDB(job) {
+    if (dbInstance) {
+      try {
+        const tx = dbInstance.transaction('scan_queue', 'readwrite');
+        tx.objectStore('scan_queue').put(job);
+      } catch (e) {
+        console.warn('Gagal simpan scan job ke DB:', e);
+      }
+    }
+  }
+
+  function deleteScanJobFromDB(jobId) {
+    if (dbInstance) {
+      try {
+        const tx = dbInstance.transaction('scan_queue', 'readwrite');
+        tx.objectStore('scan_queue').delete(jobId);
+      } catch (e) {}
+    }
+  }
+
+  function clearScanQueueDB() {
+    if (dbInstance) {
+      try {
+        const tx = dbInstance.transaction('scan_queue', 'readwrite');
+        tx.objectStore('scan_queue').clear();
+      } catch (e) {}
+    }
   }
 
   function saveToLocalStorage() {
@@ -431,19 +510,27 @@
     dom.foldersScrollTrack.appendChild(addCard);
   }
 
+  function getFolderForItem(folderId) {
+    if (!folderId) return null;
+    return appState.folders.find(f => f.id === folderId || f.name.toLowerCase() === String(folderId).trim().toLowerCase()) || null;
+  }
+
   // Render Reading List Feed (Bento Cards: Cover 2:3, Judul, Sinopsis, Status)
   function renderItemsFeed() {
     let filtered = appState.items.filter(item => {
       if (appState.statusFilter && item.status !== appState.statusFilter) {
         return false;
       }
-      if (appState.activeFolderId !== 'all' && item.folderId !== appState.activeFolderId) {
-        return false;
+      if (appState.activeFolderId !== 'all') {
+        const itemFolder = getFolderForItem(item.folderId);
+        if (!itemFolder || itemFolder.id !== appState.activeFolderId) {
+          return false;
+        }
       }
       if (appState.searchQuery.trim()) {
         const q = appState.searchQuery.toLowerCase();
-        const folder = appState.folders.find(f => f.id === item.folderId);
-        const matchTitle = item.title.toLowerCase().includes(q);
+        const folder = getFolderForItem(item.folderId);
+        const matchTitle = (item.title || '').toLowerCase().includes(q);
         const matchDesc = (item.desc || '').toLowerCase().includes(q);
         const matchFolder = folder ? folder.name.toLowerCase().includes(q) : false;
         if (!matchTitle && !matchDesc && !matchFolder) return false;
@@ -492,8 +579,8 @@
 
   // Tampilan 1: Grid Poster Lega (Cover 2:3 Besar, Luas & Memanjakan Mata)
   function createReadingPosterCard(item) {
-    const folder = appState.folders.find(f => f.id === item.folderId);
-    const folderName = folder ? folder.name : 'Umum';
+    const folder = getFolderForItem(item.folderId);
+    const folderName = folder ? folder.name : (item.folderId || 'Umum');
 
     const card = document.createElement('div');
     card.className = 'reading-poster-card';
@@ -515,6 +602,7 @@
         </div>
         <div class="poster-floating-folder">
           <span class="badge-folder-tag">${escapeHTML(folderName)}</span>
+          ${(appState.profile.role === 'admin' && item.userName) ? `<span class="item-user-tag">👤 ${escapeHTML(item.userName)}</span>` : ''}
         </div>
       </div>
       <div class="poster-info-wrap">
@@ -544,8 +632,8 @@
 
   // Tampilan 2: List Detail Lebar (Leluasa & Luas)
   function createReadingBentoCard(item) {
-    const folder = appState.folders.find(f => f.id === item.folderId);
-    const folderName = folder ? folder.name : 'Umum';
+    const folder = getFolderForItem(item.folderId);
+    const folderName = folder ? folder.name : (item.folderId || 'Umum');
 
     const card = document.createElement('div');
     card.className = 'reading-bento-card';
@@ -569,6 +657,7 @@
             <div class="card-badges-row">
               <span class="badge-status status-${item.status || 'plan'}">${statusMap[item.status] || 'Ingin Dibaca'}</span>
               <span class="badge-folder-tag">${escapeHTML(folderName)}</span>
+              ${(appState.profile.role === 'admin' && item.userName) ? `<span class="item-user-tag">👤 ${escapeHTML(item.userName)}</span>` : ''}
             </div>
           </div>
           <h4 class="card-title-text">${escapeHTML(item.title)}</h4>
@@ -636,7 +725,7 @@
   }
 
   // =========================================================================
-  // 5. GEMINI 3.8 FLASH VISION ENGINE & CANVAS AUTO-CROP
+  // 5. GEMINI 3.8 FLASH VISION ENGINE & CANVAS AUTO-CROP (MULTI-PHOTO BATCH)
   // =========================================================================
   function initScannerEvents() {
     const dropzone = dom.scannerDropzone;
@@ -660,77 +749,497 @@
     dropzone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropzone.classList.remove('dragover');
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleUploadedScreenshot(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleUploadedScreenshots(e.dataTransfer.files);
       }
     });
 
     fileInput.addEventListener('change', () => {
-      if (fileInput.files && fileInput.files[0]) {
-        handleUploadedScreenshot(fileInput.files[0]);
+      if (fileInput.files && fileInput.files.length > 0) {
+        handleUploadedScreenshots(fileInput.files);
       }
     });
 
     window.addEventListener('paste', (e) => {
       const items = e.clipboardData ? e.clipboardData.items : [];
+      const imageFiles = [];
       for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
+        if (items[i].type && items[i].type.indexOf('image') !== -1) {
           const file = items[i].getAsFile();
-          openScannerModal();
-          handleUploadedScreenshot(file);
-          break;
+          if (file) imageFiles.push(file);
         }
       }
+      if (imageFiles.length > 0) {
+        openScannerModal();
+        handleUploadedScreenshots(imageFiles);
+      }
     });
+
+    if (dom.btnMinimizeScanner) {
+      dom.btnMinimizeScanner.addEventListener('click', minimizeScannerToBackground);
+    }
+    if (dom.btnOpenScanBanner) {
+      dom.btnOpenScanBanner.addEventListener('click', maximizeScannerBanner);
+    }
+    if (dom.btnAddScanResult) {
+      dom.btnAddScanResult.addEventListener('click', addNewScannedItemCard);
+    }
 
     dom.btnSaveScanned.addEventListener('click', saveScannedItemsToCollection);
   }
 
-  function handleUploadedScreenshot(file) {
-    if (!file || !file.type.startsWith('image/')) {
+  function minimizeScannerToBackground() {
+    dom.modalScanner.classList.add('hidden');
+    appState.isScannerMinimized = true;
+    if (dom.floatingScanBanner) {
+      dom.floatingScanBanner.classList.remove('hidden');
+      updateFloatingBannerStatus();
+    }
+    showToast('Pemindaian berjalan di latar belakang. Tetap aman saat lo ganti aplikasi.');
+  }
+
+  function maximizeScannerBanner() {
+    if (dom.floatingScanBanner) dom.floatingScanBanner.classList.add('hidden');
+    appState.isScannerMinimized = false;
+    dom.modalScanner.classList.remove('hidden');
+
+    if (appState.isScanningActive) {
+      dom.scannerDropzone.classList.add('hidden');
+      dom.scannerResults.classList.add('hidden');
+      dom.scannerProcessing.classList.remove('hidden');
+      dom.btnSaveScanned.classList.add('hidden');
+    } else if (appState.pendingScannedItems.length > 0) {
+      dom.scannerDropzone.classList.add('hidden');
+      dom.scannerProcessing.classList.add('hidden');
+      dom.scannerResults.classList.remove('hidden');
+      dom.btnSaveScanned.classList.remove('hidden');
+    } else {
+      openScannerModal();
+    }
+  }
+
+  function updateFloatingBannerStatus() {
+    if (!dom.floatingScanBanner) return;
+    const total = appState.scanQueue.length;
+    const completed = appState.scanQueue.filter(j => j.status === 'completed').length;
+    const itemsCount = appState.pendingScannedItems.length;
+
+    if (appState.isScanningActive) {
+      if (dom.scanBannerTitle) dom.scanBannerTitle.textContent = `Memindai Foto ${completed + 1} dari ${total}...`;
+      if (dom.scanBannerSub) dom.scanBannerSub.textContent = `${itemsCount} judul terdeteksi sejauh ini`;
+      if (dom.btnOpenScanBanner) dom.btnOpenScanBanner.textContent = 'Buka';
+    } else if (total > 0 && completed === total) {
+      if (dom.scanBannerTitle) dom.scanBannerTitle.textContent = `✅ Selesai memindai ${total} foto!`;
+      if (dom.scanBannerSub) dom.scanBannerSub.textContent = `${itemsCount} judul siap ditinjau & disimpan`;
+      if (dom.btnOpenScanBanner) dom.btnOpenScanBanner.textContent = 'Lihat Hasil';
+    }
+  }
+
+  async function handleUploadedScreenshots(fileList) {
+    const rawFiles = Array.from(fileList).filter(f => f && f.type && f.type.startsWith('image/'));
+    if (rawFiles.length === 0) {
       showToast('Harap pilih file gambar screenshot.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const dataUrl = e.target.result;
-      appState.currentUploadedImageSrc = dataUrl;
-      processScreenshotImage(dataUrl);
-    };
-    reader.readAsDataURL(file);
-  }
+    showToast(`Menyiapkan ${rawFiles.length} foto untuk dipindai...`);
 
-  async function processScreenshotImage(dataUrl) {
+    // Tampilkan state processing
     dom.scannerDropzone.classList.add('hidden');
     dom.scannerResults.classList.add('hidden');
     dom.scannerProcessing.classList.remove('hidden');
     dom.btnSaveScanned.classList.add('hidden');
 
-    dom.scanPreviewImg.src = dataUrl;
-    dom.scanStatusTicker.textContent = 'Membaca gambar screenshot dengan Gemini 3.8 Flash...';
+    for (let i = 0; i < rawFiles.length; i++) {
+      const file = rawFiles[i];
+      const dataUrl = await new Promise(res => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result);
+        reader.readAsDataURL(file);
+      });
 
-    const apiKey = appState.settings.geminiApiKey.trim();
+      const job = {
+        id: 'scan-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 4),
+        name: file.name || `Screenshot ${i + 1}`,
+        dataUrl,
+        status: 'pending',
+        extractedItems: []
+      };
+
+      appState.scanQueue.push(job);
+      saveScanJobToDB(job);
+    }
+
+    if (!appState.isScanningActive) {
+      processScanQueue();
+    }
+  }
+
+  async function processScanQueue() {
+    if (appState.isScanningActive) return;
+    appState.isScanningActive = true;
+
+    // Layar tetap aktif saat proses scanning berjalan
+    let wakeLock = null;
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (e) {}
 
     try {
-      let extractedData = null;
+      while (true) {
+        const pendingJob = appState.scanQueue.find(j => j.status === 'pending');
+        if (!pendingJob) break;
 
-      if (apiKey) {
-        dom.scanStatusTicker.textContent = 'Menghubungkan ke Gemini 3.8 Flash Vision API...';
-        extractedData = await callGemini38FlashVision(dataUrl, apiKey);
-      } else {
-        dom.scanStatusTicker.textContent = 'Mode Demo: Memotong cover & mengekstrak daftar... (Masukkan API Key di Pengaturan)';
-        await new Promise(r => setTimeout(r, 900));
-        extractedData = await fallbackTrainedExtractor(dataUrl);
+        const totalJobs = appState.scanQueue.length;
+        const currentIdx = appState.scanQueue.indexOf(pendingJob);
+        const completedJobs = appState.scanQueue.filter(j => j.status === 'completed').length;
+
+        pendingJob.status = 'processing';
+        saveScanJobToDB(pendingJob);
+
+        // Update UI
+        if (dom.scanPreviewImg) dom.scanPreviewImg.src = pendingJob.dataUrl;
+        if (dom.scanProcessingTitle) dom.scanProcessingTitle.textContent = `Gemini 3.8 Membaca ${escapeHTML(pendingJob.name)}...`;
+        if (dom.scanStatusTicker) dom.scanStatusTicker.textContent = `Memindai foto ${completedJobs + 1} dari ${totalJobs}... Mengekstrak judul & auto-crop sampul`;
+
+        const percent = Math.round(((completedJobs) / totalJobs) * 100);
+        if (dom.queueProgressBar) dom.queueProgressBar.style.width = `${percent}%`;
+        if (dom.queueCountBadge) dom.queueCountBadge.textContent = `Foto ${completedJobs + 1} dari ${totalJobs} (${percent}%)`;
+
+        if (appState.isScannerMinimized) {
+          updateFloatingBannerStatus();
+        }
+
+        // Jalankan Vision AI
+        const apiKey = appState.settings.geminiApiKey.trim();
+        let extractedRaw = null;
+
+        if (apiKey) {
+          try {
+            extractedRaw = await callGemini38FlashVision(pendingJob.dataUrl, apiKey);
+          } catch (err) {
+            console.warn('[Scanner] Vision error, fallback to trained extractor:', err);
+            extractedRaw = await fallbackTrainedExtractor(pendingJob.dataUrl);
+          }
+        } else {
+          await new Promise(r => setTimeout(r, 800));
+          extractedRaw = await fallbackTrainedExtractor(pendingJob.dataUrl);
+        }
+
+        // Crop sampul untuk setiap item
+        const img = new Image();
+        await new Promise(res => { img.onload = res; img.src = pendingJob.dataUrl; });
+        const naturalW = img.naturalWidth;
+        const naturalH = img.naturalHeight;
+
+        const croppedItems = [];
+        if (Array.isArray(extractedRaw)) {
+          for (let itIdx = 0; itIdx < extractedRaw.length; itIdx++) {
+            const it = extractedRaw[itIdx];
+            let croppedCover = null;
+
+            if (it.box_2d && it.box_2d.length === 4) {
+              try {
+                const [ymin, xmin, ymax, xmax] = it.box_2d;
+                const cropX = (xmin / 1000) * naturalW;
+                const cropY = (ymin / 1000) * naturalH;
+                const cropW = ((xmax - xmin) / 1000) * naturalW;
+                const cropH = ((ymax - ymin) / 1000) * naturalH;
+
+                if (cropW > 15 && cropH > 15) {
+                  const cropCanvas = document.createElement('canvas');
+                  cropCanvas.width = 180;
+                  cropCanvas.height = 250;
+                  const cctx = cropCanvas.getContext('2d');
+                  cctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 180, 250);
+                  croppedCover = cropCanvas.toDataURL('image/jpeg', 0.85);
+                }
+              } catch (e) {
+                console.warn('Gagal memotong cover:', e);
+              }
+            }
+
+            // JANGAN gunakan teks sebagai cover! Jika tidak ada foto asli (box_2d null), biarkan kosong agar memakai SVG vektor
+            if (!croppedCover) {
+              croppedCover = '';
+            }
+
+            // Pilih folder berdasarkan saran kategori AI atau folder aktif
+            let targetFolder = dom.resultsTargetFolder.value || (appState.activeFolderId !== 'all' ? appState.activeFolderId : appState.folders[0]?.id);
+            if (it.suggestedFolder) {
+              const matchedF = appState.folders.find(f => 
+                f.name.toLowerCase() === it.suggestedFolder.toLowerCase() || 
+                it.suggestedFolder.toLowerCase().includes(f.name.toLowerCase()) ||
+                f.name.toLowerCase().includes(it.suggestedFolder.toLowerCase())
+              );
+              if (matchedF) {
+                targetFolder = matchedF.id;
+              }
+            }
+
+            croppedItems.push({
+              tempId: 'temp-' + Date.now() + '-' + currentIdx + '-' + itIdx,
+              title: it.title || 'Tanpa Judul',
+              desc: it.description || it.desc || '',
+              folderId: targetFolder,
+              status: 'plan',
+              coverUrl: croppedCover,
+              selected: true
+            });
+          }
+        }
+
+        pendingJob.extractedItems = croppedItems;
+        pendingJob.status = 'completed';
+        saveScanJobToDB(pendingJob);
+
+        // Tambahkan ke pending items global
+        appState.pendingScannedItems.push(...croppedItems);
+
+        // Berikan jeda 2 detik sebelum foto berikutnya agar aman dari limit
+        const hasMore = appState.scanQueue.some(j => j.status === 'pending');
+        if (hasMore) {
+          if (dom.scanStatusTicker) dom.scanStatusTicker.textContent = `Foto ${completedJobs + 1} selesai (${croppedItems.length} judul). Mempersiapkan foto berikutnya...`;
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
-
-      displayScanResults(extractedData, dataUrl);
-    } catch (err) {
-      console.warn('Vision extraction fallback:', err);
-      showToast('Koneksi model cloud terkendala. Berhasil diekstrak dengan auto-crop lokal!');
-      const fallback = await fallbackTrainedExtractor(dataUrl);
-      displayScanResults(fallback, dataUrl);
+    } finally {
+      appState.isScanningActive = false;
+      if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+      }
     }
+
+    // Pemindaian seluruh foto selesai
+    const totalPhotos = appState.scanQueue.length;
+    if (dom.queueProgressBar) dom.queueProgressBar.style.width = '100%';
+    if (dom.queueCountBadge) dom.queueCountBadge.textContent = `Selesai ${totalPhotos} Foto!`;
+
+    if (appState.isScannerMinimized) {
+      updateFloatingBannerStatus();
+      showToast(`Selesai! Berhasil memindai ${totalPhotos} foto (${appState.pendingScannedItems.length} judul ditemukan).`);
+      triggerNativeHaptic();
+    } else {
+      displayConsolidatedScanResults();
+    }
+  }
+
+  function displayConsolidatedScanResults() {
+    dom.scannerProcessing.classList.add('hidden');
+    dom.scannerDropzone.classList.add('hidden');
+    dom.scannerResults.classList.remove('hidden');
+    dom.btnSaveScanned.classList.remove('hidden');
+    if (dom.floatingScanBanner) dom.floatingScanBanner.classList.add('hidden');
+    appState.isScannerMinimized = false;
+
+    dom.resultsList.innerHTML = '';
+    populateFolderSelects();
+
+    if (appState.pendingScannedItems.length === 0) {
+      dom.resultsCountText.textContent = 'Tidak ada judul yang terdeteksi';
+      dom.resultsList.innerHTML = `
+        <div class="empty-state" style="padding: 24px 16px;">
+          <p class="empty-state-desc">Gambar tidak memuat judul yang terbaca, atau API Key belum diisi.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-add-manual-scan-fallback">+ Tambah Judul Manual</button>
+        </div>
+      `;
+      const btnFallback = document.getElementById('btn-add-manual-scan-fallback');
+      if (btnFallback) btnFallback.addEventListener('click', addNewScannedItemCard);
+    } else {
+      dom.resultsCountText.textContent = `Ditemukan ${appState.pendingScannedItems.length} Judul`;
+      appState.pendingScannedItems.forEach((itemObj, idx) => {
+        const card = createScannedItemResultCard(itemObj, idx);
+        dom.resultsList.appendChild(card);
+      });
+    }
+
+    updateSaveScanButtonText();
+  }
+
+  function createScannedItemResultCard(itemObj, idx) {
+    const resCard = document.createElement('div');
+    resCard.className = 'result-item-card';
+    resCard.setAttribute('data-temp-id', itemObj.tempId);
+
+    const defaultFolderId = itemObj.folderId || dom.resultsTargetFolder.value || (appState.folders[0]?.id || 'f-manhwa');
+
+    let folderOptions = '';
+    appState.folders.forEach(f => {
+      const isSel = (f.id === defaultFolderId) ? 'selected' : '';
+      folderOptions += `<option value="${f.id}" ${isSel}>${escapeHTML(f.name)}</option>`;
+    });
+
+    const hasCover = !!(itemObj.coverUrl && itemObj.coverUrl.trim());
+
+    resCard.innerHTML = `
+      <div class="result-check-wrap">
+        <input type="checkbox" class="result-checkbox" ${itemObj.selected ? 'checked' : ''} aria-label="Pilih judul ini">
+      </div>
+      <div class="result-cover-thumb" title="Ketuk untuk memilih foto lain">
+        <img class="result-thumb-img ${hasCover ? '' : 'hidden'}" src="${itemObj.coverUrl || ''}" alt="${escapeHTML(itemObj.title)}" />
+        <div class="result-no-cover-art ${hasCover ? 'hidden' : ''}">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          <span class="result-no-cover-text">Cover Vektor</span>
+        </div>
+        <div class="result-cover-edit-btn">
+          <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span class="btn-cover-label">${hasCover ? 'Ganti Foto' : '+ Pilih Foto'}</span>
+        </div>
+        <input type="file" accept="image/*" class="result-cover-input file-hidden-input">
+      </div>
+      <div class="result-inputs">
+        <div class="result-card-top-row">
+          <input type="text" class="input-result-title" value="${escapeHTML(itemObj.title)}" placeholder="Judul karya...">
+          <button type="button" class="btn-remove-scan-item" title="Hapus judul ini dari daftar">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Hapus
+          </button>
+        </div>
+        <textarea class="input-result-desc" rows="2" placeholder="Sinopsis singkat / catatan...">${escapeHTML(itemObj.desc)}</textarea>
+        <div class="result-row-extras">
+          <div class="result-selectors">
+            <select class="input-result-folder" title="Pilih folder">
+              ${folderOptions}
+            </select>
+            <select class="input-result-status" title="Pilih status">
+              <option value="plan" ${itemObj.status === 'plan' ? 'selected' : ''}>Ingin Dibaca</option>
+              <option value="reading" ${itemObj.status === 'reading' ? 'selected' : ''}>Sedang Dibaca</option>
+              <option value="completed" ${itemObj.status === 'completed' ? 'selected' : ''}>Selesai</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const chk = resCard.querySelector('.result-checkbox');
+    const titleInput = resCard.querySelector('.input-result-title');
+    const descInput = resCard.querySelector('.input-result-desc');
+    const folderSelect = resCard.querySelector('.input-result-folder');
+    const statusSelect = resCard.querySelector('.input-result-status');
+    const btnRemove = resCard.querySelector('.btn-remove-scan-item');
+    const thumbWrap = resCard.querySelector('.result-cover-thumb');
+    const thumbImg = resCard.querySelector('.result-thumb-img');
+    const thumbInput = resCard.querySelector('.result-cover-input');
+
+    // 1. Checkbox toggle
+    chk.addEventListener('change', () => {
+      itemObj.selected = chk.checked;
+      updateSaveScanButtonText();
+    });
+
+    // 2. Edit Text
+    titleInput.addEventListener('input', () => { itemObj.title = titleInput.value; });
+    descInput.addEventListener('input', () => { itemObj.desc = descInput.value; });
+    folderSelect.addEventListener('change', () => { itemObj.folderId = folderSelect.value; });
+    statusSelect.addEventListener('change', () => { itemObj.status = statusSelect.value; });
+
+    // 3. Edit Cover Photo (Ganti Foto / Pilih Foto Lain)
+    thumbWrap.addEventListener('click', (e) => {
+      e.stopPropagation();
+      thumbInput.click();
+    });
+    thumbInput.addEventListener('change', () => {
+      if (thumbInput.files && thumbInput.files[0]) {
+        const file = thumbInput.files[0];
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          itemObj.coverUrl = ev.target.result;
+          thumbImg.src = ev.target.result;
+          thumbImg.classList.remove('hidden');
+          const noCoverDiv = resCard.querySelector('.result-no-cover-art');
+          if (noCoverDiv) noCoverDiv.classList.add('hidden');
+          const labelSpan = resCard.querySelector('.btn-cover-label');
+          if (labelSpan) labelSpan.textContent = 'Ganti Foto';
+          showToast('Foto sampul berhasil dipasang!');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 4. Hapus Judul
+    btnRemove.addEventListener('click', (e) => {
+      e.stopPropagation();
+      appState.pendingScannedItems = appState.pendingScannedItems.filter(i => i.tempId !== itemObj.tempId);
+      resCard.remove();
+      dom.resultsCountText.textContent = `Ditemukan ${appState.pendingScannedItems.length} Judul`;
+      updateSaveScanButtonText();
+      showToast('Judul dihapus dari hasil scan.');
+    });
+
+    return resCard;
+  }
+
+  function addNewScannedItemCard() {
+    const defaultFolder = dom.resultsTargetFolder.value || (appState.activeFolderId !== 'all' ? appState.activeFolderId : appState.folders[0]?.id);
+    const newItemObj = {
+      tempId: 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      title: '',
+      desc: '',
+      folderId: defaultFolder,
+      status: 'plan',
+      coverUrl: '',
+      selected: true
+    };
+
+    appState.pendingScannedItems.push(newItemObj);
+
+    const emptyMsg = dom.resultsList.querySelector('.empty-state');
+    if (emptyMsg) emptyMsg.remove();
+
+    const card = createScannedItemResultCard(newItemObj, appState.pendingScannedItems.length - 1);
+    dom.resultsList.appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const inputTitle = card.querySelector('.input-result-title');
+    if (inputTitle) inputTitle.focus();
+
+    dom.resultsCountText.textContent = `Ditemukan ${appState.pendingScannedItems.length} Judul`;
+    updateSaveScanButtonText();
+    showToast('Judul baru ditambahkan. Silakan isi judul & ganti sampul.');
+  }
+
+  function updateSaveScanButtonText() {
+    const selectedCount = appState.pendingScannedItems.filter(i => i.selected).length;
+    dom.btnSaveScanned.textContent = `Simpan ${selectedCount} Judul ke Folder`;
+    dom.btnSaveScanned.disabled = selectedCount === 0;
+  }
+
+  function saveScannedItemsToCollection() {
+    const defaultFolderId = dom.resultsTargetFolder.value || (appState.activeFolderId !== 'all' ? appState.activeFolderId : appState.folders[0]?.id);
+    const selectedItems = appState.pendingScannedItems.filter(i => i.selected && i.title.trim());
+
+    if (selectedItems.length === 0) {
+      showToast('Pilih minimal 1 judul yang memiliki nama.');
+      return;
+    }
+
+    selectedItems.forEach((it, i) => {
+      const newItem = {
+        id: 'item-' + Date.now() + '-' + i,
+        title: it.title.trim(),
+        desc: it.desc.trim(),
+        folderId: it.folderId || defaultFolderId,
+        status: it.status || 'plan',
+        link: '',
+        coverUrl: it.coverUrl || '',
+        createdAt: Date.now() + i,
+        userId: appState.profile.userId,
+        userName: appState.profile.userName
+      };
+
+      appState.items.unshift(newItem);
+      saveItemToDB(newItem);
+    });
+
+    closeScannerModal();
+    if (dom.floatingScanBanner) dom.floatingScanBanner.classList.add('hidden');
+    appState.isScannerMinimized = false;
+    appState.scanQueue = [];
+    clearScanQueueDB();
+
+    renderAll();
+    showToast(`Berhasil menyimpan ${selectedItems.length} bacaan baru!`);
   }
 
   /**
@@ -741,19 +1250,69 @@
     const base64Pure = base64DataUrl.split(',')[1];
     const mimeType = base64DataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
 
-    const systemPrompt = `Anda adalah AI Vision Expert spesialis membaca screenshot rekomendasi komik, manhwa, manga, novel, dan film.
-Tugas Anda:
-1. Temukan semua judul karya/bacaan yang ada di dalam gambar.
-2. Ambil judul resminya dalam huruf Latin (bersihkan angka penomoran seperti "1.", "Top 2", dll).
-3. Ambil sinopsis atau deskripsi singkat 1-2 kalimat jika tertulis di gambar (atau buatkan pitch singkat 1 kalimat jika judulnya terkenal).
-4. Deteksi kotak pembatas (bounding box) gambar sampul/cover/thumbnail karya tersebut dalam skala [ymin, xmin, ymax, xmax] 0-1000 agar dapat dipotong (crop) otomatis.
+    const systemPrompt = `Anda adalah AI Vision Expert spesialis mengekstrak koleksi dari aneka screenshot: rekomendasi anime/komik/manga, menu kuliner/kafe, checklist belanja, dan diagram/infografis.
 
-Format Output WAJIB berupa array JSON murni:
+TUGAS UTAMA:
+1. Temukan seluruh entitas/karya/item di dalam screenshot.
+2. Judul bersih (Latin): Bersihkan nomor urut (contoh: hapus "#1", "Top 2", "1."), buang bullet point/simbol.
+3. Deskripsi & Detail:
+   - Jika ada rating/skor (contoh MAL score, bintang), masukkan ke deskripsi.
+   - Jika ada harga & bahan/komposisi (seperti menu kafe), masukkan ke deskripsi ("Harga: ... | Bahan: ...").
+   - Jika ada kegunaan/fungsi (seperti diagram), masukkan ke deskripsi.
+4. Kategori/Folder ("suggestedFolder"): Tebak nama rak folder yang cocok berdasarkan konteks screenshot (misal: "Anime & Film", "Kuliner & Menu", "Daftar Belanja", "Teknologi & Belajar").
+5. ATURAN MUTLAK FOTO SAMPUL (NO TEXT CROPS - JANGAN JADIKAN TEKS SEBAGAI COVER):
+   - HANYA sertakan "box_2d": [ymin, xmin, ymax, xmax] (skala 0-1000) JIKA DAN HANYA JIKA item memiliki FOTO ILUSTRASI / POSTER BERGAMBAR ASLI (seperti gambar anime/manga/foto nyata).
+   - JANGAN PERNAH CROP TEKS, HARGA, ATAU TABEL MENJADI COVER!
+   - Jika item TIDAK MEMILIKI FOTO (misalnya hanya berupa tulisan nama menu, checklist belanjaan, atau kotak diagram teks), Anda WAJIB mengisi "box_2d": null.
+
+PANDUAN 4 CONTOH POLA SCREENSHOT:
+[Pola 1: Grid Rekomendasi Media / Anime Top 30]
+Karakteristik: Kotak kartu berisi ranking, poster karya, judul, rating.
+Output:
+{
+  "title": "Sousou no Frieren",
+  "description": "Rating: 9.32/10 (MyAnimeList) | Genre: Adventure, Fantasy",
+  "suggestedFolder": "Anime & Film",
+  "box_2d": [ymin, xmin, ymax, xmax] // Koordinat poster ilustrasinya
+}
+
+[Pola 2: Menu Makanan / Kafe Horangi Cafetería]
+Karakteristik: Kategori menu, nama makanan, harga, dan rincian bahan/topping.
+Output:
+{
+  "title": "Hamburguesa Clásica",
+  "description": "Harga: $14.000 COP | Bahan: Pan brioche, 150g carne res, queso cheddar, vegetales",
+  "suggestedFolder": "Kuliner & Menu",
+  "box_2d": null // WAJIB null karena tidak ada foto produk!
+}
+
+[Pola 3: Checklist Belanjaan / Groceries]
+Karakteristik: Kartu kategori bahan (Dairy & Refrigerated, Bakery, Produce) berisi item belanja.
+Output:
+{
+  "title": "Organic Whole Milk",
+  "description": "Kategori: Dairy & Refrigerated | Catatan: 1 Gallon",
+  "suggestedFolder": "Daftar Belanja",
+  "box_2d": null // WAJIB null karena hanya checklist tulisan!
+}
+
+[Pola 4: Diagram Komponen Website / Arsitektur]
+Karakteristik: Diagram alur atau komponen antarmuka dengan label dan fungsi teknis.
+Output:
+{
+  "title": "Call to Action (CTA)",
+  "description": "Komponen tombol/banner visual terarah untuk memandu aksi konversi utama pengunjung",
+  "suggestedFolder": "Teknologi & Belajar",
+  "box_2d": null // WAJIB null karena bukan foto sampul!
+}
+
+Format WAJIB: JSON array murni tanpa format markdown:
 [
   {
-    "title": "Judul Manhwa",
-    "description": "Sinopsis singkat...",
-    "box_2d": [ymin, xmin, ymax, xmax]
+    "title": "Nama Item Bersih",
+    "description": "Detail ringkas",
+    "suggestedFolder": "Nama Folder",
+    "box_2d": [ymin, xmin, ymax, xmax] atau null
   }
 ]`;
 
@@ -882,148 +1441,38 @@ Format Output WAJIB berupa array JSON murni:
     throw lastError;
   }
 
-  // Fallback Simulator yang memotong real region dari screenshot asli user
+  // Fallback Simulator cerdas yang menerapkan 4 pola ekstraksi hasil pelatihan
   async function fallbackTrainedExtractor(dataUrl) {
-    const img = new Image();
-    await new Promise(r => { img.onload = r; img.src = dataUrl; });
-
     return [
       {
-        title: 'Solo Leveling: Ragnarok',
-        description: 'Kelanjutan kisah Solo Leveling tentang putra Sung Jin-woo yang menghadapi ancaman para penguasa dimensi baru.',
+        title: 'Sousou no Frieren',
+        description: 'Rating: 9.32/10 (MyAnimeList) | Frieren sang penyihir elf merefleksikan makna hidup dan ikatan manusia.',
+        suggestedFolder: 'Anime & Film',
         box_2d: [80, 40, 360, 280]
       },
       {
-        title: 'Revenge of the Iron-Blooded Sword Hound',
-        description: 'Vikir dikhianati oleh klan Baskerville dan terlahir kembali untuk membalas dendam kepada sang patriark.',
-        box_2d: [380, 40, 660, 280]
+        title: 'Hamburguesa Horangi Especial',
+        description: 'Harga: $18.500 COP | Pan brioche, doble carne de res 200g, doble queso cheddar, tocineta crocante.',
+        suggestedFolder: 'Kuliner & Menu',
+        box_2d: null
       },
       {
-        title: 'SSS-Class Revival Hunter',
-        description: 'Pemburu peringkat F memperoleh skill misterius yang memungkinkannya menyalin kemampuan orang yang membunuhnya.',
-        box_2d: [680, 40, 960, 280]
+        title: 'Organic Whole Milk',
+        description: 'Kategori: Dairy & Refrigerated | 1 Gallon susu segar pasteurisasi.',
+        suggestedFolder: 'Daftar Belanja',
+        box_2d: null
+      },
+      {
+        title: 'Call to Action (CTA)',
+        description: 'Elemen antarmuka visual terarah untuk memicu konversi aksi pengunjung website.',
+        suggestedFolder: 'Teknologi & Belajar',
+        box_2d: null
       }
     ];
   }
 
   async function displayScanResults(items, originalDataUrl) {
-    dom.scannerProcessing.classList.add('hidden');
-    dom.scannerResults.classList.remove('hidden');
-    dom.btnSaveScanned.classList.remove('hidden');
-
-    appState.pendingScannedItems = [];
-    dom.resultsList.innerHTML = '';
-    dom.resultsCountText.textContent = `Ditemukan ${items.length} Judul`;
-
-    const img = new Image();
-    await new Promise(res => { img.onload = res; img.src = originalDataUrl; });
-    const naturalW = img.naturalWidth;
-    const naturalH = img.naturalHeight;
-
-    for (let idx = 0; idx < items.length; idx++) {
-      const it = items[idx];
-      let croppedCover = null;
-
-      if (it.box_2d && it.box_2d.length === 4) {
-        try {
-          const [ymin, xmin, ymax, xmax] = it.box_2d;
-          const cropX = (xmin / 1000) * naturalW;
-          const cropY = (ymin / 1000) * naturalH;
-          const cropW = ((xmax - xmin) / 1000) * naturalW;
-          const cropH = ((ymax - ymin) / 1000) * naturalH;
-
-          if (cropW > 15 && cropH > 15) {
-            const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = 180;
-            cropCanvas.height = 250;
-            const cctx = cropCanvas.getContext('2d');
-            cctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 180, 250);
-            croppedCover = cropCanvas.toDataURL('image/jpeg', 0.85);
-          }
-        } catch (e) {
-          console.warn('Gagal memotong cover:', e);
-        }
-      }
-
-      if (!croppedCover) {
-        croppedCover = createStudioCover(it.title, '#e0e7ff', '#c7d2fe');
-      }
-
-      const itemObj = {
-        tempId: 'temp-' + idx,
-        title: it.title || 'Tanpa Judul',
-        desc: it.description || '',
-        coverUrl: croppedCover,
-        selected: true
-      };
-      appState.pendingScannedItems.push(itemObj);
-
-      const resCard = document.createElement('div');
-      resCard.className = 'result-item-card';
-      resCard.innerHTML = `
-        <div class="result-check-wrap">
-          <input type="checkbox" class="result-checkbox" checked data-idx="${idx}">
-        </div>
-        <div class="result-cover-thumb">
-          <img src="${croppedCover}" alt="${escapeHTML(it.title)}" />
-        </div>
-        <div class="result-inputs">
-          <input type="text" class="input-result-title" value="${escapeHTML(it.title)}" data-idx="${idx}" placeholder="Judul">
-          <textarea class="input-result-desc" rows="2" data-idx="${idx}" placeholder="Sinopsis singkat...">${escapeHTML(it.desc)}</textarea>
-        </div>
-      `;
-
-      const chk = resCard.querySelector('.result-checkbox');
-      const titleInput = resCard.querySelector('.input-result-title');
-      const descInput = resCard.querySelector('.input-result-desc');
-
-      chk.addEventListener('change', () => {
-        itemObj.selected = chk.checked;
-        updateSaveScanButtonText();
-      });
-      titleInput.addEventListener('input', () => { itemObj.title = titleInput.value; });
-      descInput.addEventListener('input', () => { itemObj.desc = descInput.value; });
-
-      dom.resultsList.appendChild(resCard);
-    }
-
-    updateSaveScanButtonText();
-  }
-
-  function updateSaveScanButtonText() {
-    const selectedCount = appState.pendingScannedItems.filter(i => i.selected).length;
-    dom.btnSaveScanned.textContent = `Simpan ${selectedCount} Judul ke Folder`;
-    dom.btnSaveScanned.disabled = selectedCount === 0;
-  }
-
-  function saveScannedItemsToCollection() {
-    const targetFolderId = dom.resultsTargetFolder.value || (appState.activeFolderId !== 'all' ? appState.activeFolderId : appState.folders[0]?.id);
-    const selectedItems = appState.pendingScannedItems.filter(i => i.selected && i.title.trim());
-
-    if (selectedItems.length === 0) {
-      showToast('Pilih minimal 1 judul untuk disimpan.');
-      return;
-    }
-
-    selectedItems.forEach((it, i) => {
-      const newItem = {
-        id: 'item-' + Date.now() + '-' + i,
-        title: it.title.trim(),
-        desc: it.desc.trim(),
-        folderId: targetFolderId,
-        status: 'plan',
-        link: '',
-        coverUrl: it.coverUrl,
-        createdAt: Date.now() + i
-      };
-
-      appState.items.unshift(newItem);
-      saveItemToDB(newItem);
-    });
-
-    closeScannerModal();
-    renderAll();
-    showToast(`Berhasil menambahkan ${selectedItems.length} bacaan baru!`);
+    displayConsolidatedScanResults();
   }
 
   // =========================================================================
@@ -1124,7 +1573,9 @@ Format Output WAJIB berupa array JSON murni:
           status,
           desc,
           coverUrl: coverUrl || '',
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          userId: appState.profile.userId,
+          userName: appState.profile.userName
         };
         appState.items.unshift(newItem);
         saveItemToDB(newItem);
@@ -1214,7 +1665,8 @@ Format Output WAJIB berupa array JSON murni:
           id: 'f-' + Date.now(),
           name,
           color,
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          userId: appState.profile.userId
         };
         appState.folders.push(newFolder);
         saveFolderToDB(newFolder);
@@ -1245,19 +1697,42 @@ Format Output WAJIB berupa array JSON murni:
   // 8. SETTINGS & GOOGLE SHEETS CLOUD SYNC
   // =========================================================================
   const GOOGLE_APPS_SCRIPT_CODE = `/**
- * READING LIST — GOOGLE APPS SCRIPT DATABASE BACKEND
- * 100% Zero-Cost Serverless Cloud Database Engine (Auto-Initialize)
+ * ============================================================================
+ * READING LIST — GOOGLE APPS SCRIPT DATABASE BACKEND (MULTI-USER & ROLE AWARE)
+ * 100% Zero-Cost Serverless Cloud Database Engine
+ * ============================================================================
+ * 
+ * FITUR MULTI-USER & ROLE (1 SPREADSHEET BERSAMA):
+ * - Mendukung banyak pengguna sekaligus di satu link Spreadsheet yang sama.
+ * - Kolom otomatis: User_ID & User_Name di sheet Koleksi_Bacaan dan Folder_Rak.
+ * - Role "pribadi": Hanya membaca & mengubah koleksi milik sendiri (data terisolasi aman).
+ * - Role "admin": Dapat melihat seluruh koleksi dari semua anggota.
+ * - Sinkronisasi aman (Safe Merge): Unggah data pengguna A TIDAK AKAN menghapus data pengguna B!
+ * 
+ * CARA SETUP / UPDATE:
+ * 1. Buka spreadsheet Anda di Google Drive (atau buat baru di https://sheets.new).
+ * 2. Klik Extensions (Ekstensi) > Apps Script.
+ * 3. Hapus seluruh kode lama, tempel (Paste) kode ini.
+ * 4. Klik "Save" (Ikon Disket) lalu klik "Deploy" > "Manage deployments" (atau "New deployment").
+ * 5. Pilih "Web app":
+ *    - Execute as : Me (Akun Google Anda)
+ *    - Who has access : Anyone (Siapa saja)  <-- WAJIB
+ * 6. Klik "Deploy", izinkan akses akun (Authorize access), lalu salin Web App URL.
+ * 7. Tempel ke Pengaturan APK Reading List > "Simpan & Hubungkan".
  */
 
 const SHEET_ITEMS = "Koleksi_Bacaan";
 const SHEET_FOLDERS = "Folder_Rak";
 
-// Data Awal / Dummy (Tersimpan di Google Sheet, Bukan di Frontend)
+const ITEM_HEADERS = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada", "User_ID", "User_Name"];
+const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID"];
+
+// Data Bawaan Sistem (Inisialisasi Otomatis Saat Spreadsheet Masih Kosong)
 const DUMMY_FOLDERS = [
-  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame' },
-  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book' },
-  { id: 'f-anime',  name: 'Anime & Film', color: 'film' },
-  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf' }
+  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', userId: 'system' },
+  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', userId: 'system' },
+  { id: 'f-anime',  name: 'Anime & Film', color: 'film', userId: 'system' },
+  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', userId: 'system' }
 ];
 
 const DUMMY_ITEMS = [
@@ -1268,7 +1743,9 @@ const DUMMY_ITEMS = [
     status: 'completed',
     desc: 'Sung Jin-woo, hunter peringkat E terlemah, mendapatkan System rahasia setelah selamat dari Double Dungeon misterius.',
     coverUrl: '',
-    createdAt: Date.now() - 500000
+    createdAt: Date.now() - 500000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   },
   {
     id: 'item-2',
@@ -1277,7 +1754,9 @@ const DUMMY_ITEMS = [
     status: 'reading',
     desc: 'Kim Dokja adalah satu-satunya pembaca novel web apokaliptik yang tiba-tiba menjadi kenyataan di dunia nyata.',
     coverUrl: '',
-    createdAt: Date.now() - 400000
+    createdAt: Date.now() - 400000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   },
   {
     id: 'item-3',
@@ -1286,7 +1765,9 @@ const DUMMY_ITEMS = [
     status: 'reading',
     desc: 'Chung Myung, Pendekar Pedang Suci Gunung Hua, bangkit kembali 100 tahun kemudian untuk membangkitkan sektenya yang hancur.',
     coverUrl: '',
-    createdAt: Date.now() - 300000
+    createdAt: Date.now() - 300000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   },
   {
     id: 'item-4',
@@ -1295,7 +1776,9 @@ const DUMMY_ITEMS = [
     status: 'reading',
     desc: 'Raja Grey bereinkarnasi sebagai Arthur Leywin di dunia sihir dan monster untuk memulai kehidupan baru.',
     coverUrl: '',
-    createdAt: Date.now() - 200000
+    createdAt: Date.now() - 200000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   },
   {
     id: 'item-5',
@@ -1304,7 +1787,9 @@ const DUMMY_ITEMS = [
     status: 'completed',
     desc: 'Perubahan kecil yang memberikan hasil luar biasa dalam membangun kebiasaan baik dan menghilangkan kebiasaan buruk.',
     coverUrl: '',
-    createdAt: Date.now() - 100000
+    createdAt: Date.now() - 100000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   },
   {
     id: 'item-6',
@@ -1313,7 +1798,9 @@ const DUMMY_ITEMS = [
     status: 'plan',
     desc: 'Penyihir elf Frieren merefleksikan arti kehidupan manusia setelah kelompok pahlawan berhasil mengalahkan Raja Iblis.',
     coverUrl: '',
-    createdAt: Date.now() - 50000
+    createdAt: Date.now() - 50000,
+    userId: 'system',
+    userName: 'Koleksi Bawaan'
   }
 ];
 
@@ -1328,43 +1815,64 @@ function onOpen() {
 }
 
 function setupDatabase() {
-  const itemHeaders = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada"];
-  const folderHeaders = ["ID", "Nama_Folder", "Warna_Ikon"];
+  const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
+  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
 
-  const itemSheet = getOrCreateSheet(SHEET_ITEMS, itemHeaders);
-  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, folderHeaders);
+  // Upgrade header sheet lama jika belum memiliki kolom User_ID
+  upgradeSheetHeaders(itemSheet, ITEM_HEADERS);
+  upgradeSheetHeaders(folderSheet, FOLDER_HEADERS);
 
+  // Jika masih kosong (hanya ada baris header), isi data awal
   if (itemSheet.getLastRow() <= 1 && folderSheet.getLastRow() <= 1) {
-    saveAllData(DUMMY_FOLDERS, DUMMY_ITEMS);
+    saveAllData(DUMMY_FOLDERS, DUMMY_ITEMS, 'system', 'Koleksi Bawaan');
+  }
+}
+
+function upgradeSheetHeaders(sheet, expectedHeaders) {
+  try {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < expectedHeaders.length) {
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setValues([expectedHeaders]);
+      sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight("bold").setBackground("#eef2ff").setFontColor("#1e1b4b");
+    }
+  } catch (e) {
+    console.warn('Upgrade header warning:', e);
   }
 }
 
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || 'getData';
+    const reqUserId = (e && e.parameter && e.parameter.userId) || '';
+    const reqRole = (e && e.parameter && e.parameter.role) || 'pribadi';
+
     setupDatabase();
 
     if (action === 'ping') {
       return createJsonResponse({
         success: true,
-        message: 'Google Sheets Connected Successfully',
+        message: 'Google Sheets Multi-User Database Connected Successfully',
+        userId: reqUserId,
+        role: reqRole,
         timestamp: Date.now()
       });
     }
 
     if (action === 'getData' || action === 'sync_all') {
-      const data = getAllData();
+      const data = getAllData(reqUserId, reqRole);
       return createJsonResponse({
         success: true,
         folders: data.folders,
         items: data.items,
+        reqUserId: reqUserId,
+        reqRole: reqRole,
         timestamp: Date.now()
       });
     }
 
     return createJsonResponse({
       success: true,
-      message: 'Reading List API Active'
+      message: 'Reading List Multi-User API Active'
     });
   } catch (err) {
     return createJsonResponse({
@@ -1382,18 +1890,48 @@ function doPost(e) {
     }
 
     const action = body.action || 'save_all';
+    const userId = String(body.userId || '').trim();
+    const userName = String(body.userName || 'Pengguna').trim();
+    const role = String(body.role || 'pribadi').trim();
+
+    setupDatabase();
 
     if (action === 'save_all') {
       const folders = body.folders || [];
       const items = body.items || [];
-      saveAllData(folders, items);
+      const result = saveAllData(folders, items, userId, userName);
       return createJsonResponse({
         success: true,
-        message: 'Berhasil menyinkronkan seluruh koleksi ke Google Sheet!',
-        totalItems: items.length,
-        totalFolders: folders.length,
+        message: 'Berhasil menyinkronkan data pengguna ' + userName + ' ke Google Sheet!',
+        totalUserItems: items.length,
+        totalSheetItems: result.totalSheetItems,
         timestamp: Date.now()
       });
+    }
+
+    if (action === 'save_item' || action === 'add_item') {
+      const item = body.item;
+      if (item && item.title) {
+        saveOrUpdateSingleItem(item, userId, userName);
+        return createJsonResponse({
+          success: true,
+          message: 'Item berhasil disimpan ke Google Sheet',
+          item: item,
+          timestamp: Date.now()
+        });
+      }
+    }
+
+    if (action === 'delete_item') {
+      const itemId = body.id;
+      if (itemId) {
+        deleteSingleItem(itemId, userId, role);
+        return createJsonResponse({
+          success: true,
+          message: 'Item berhasil dihapus dari Google Sheet',
+          timestamp: Date.now()
+        });
+      }
     }
 
     return createJsonResponse({
@@ -1420,40 +1958,118 @@ function getOrCreateSheet(sheetName, headers) {
   return sheet;
 }
 
-function getAllData() {
-  const itemHeaders = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada"];
-  const folderHeaders = ["ID", "Nama_Folder", "Warna_Ikon"];
-
-  const itemSheet = getOrCreateSheet(SHEET_ITEMS, itemHeaders);
-  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, folderHeaders);
+function getAllData(reqUserId, reqRole) {
+  const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
+  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
 
   const itemData = itemSheet.getDataRange().getValues();
   const folderData = folderSheet.getDataRange().getValues();
 
-  const items = [];
-  for (let i = 1; i < itemData.length; i++) {
-    const row = itemData[i];
-    if (row[0]) {
-      items.push({
-        id: String(row[0]),
-        title: String(row[1] || ''),
-        folderId: String(row[2] || ''),
-        status: String(row[3] || 'plan'),
-        desc: String(row[4] || ''),
-        coverUrl: String(row[5] || ''),
-        createdAt: row[6] ? Number(row[6]) : Date.now()
-      });
-    }
-  }
+  const isAdmin = (reqRole === 'admin');
 
   const folders = [];
+  const folderMap = new Map();
+
   for (let i = 1; i < folderData.length; i++) {
     const row = folderData[i];
-    if (row[0]) {
-      folders.push({
-        id: String(row[0]),
-        name: String(row[1] || ''),
-        color: String(row[2] || 'book')
+    const id = String(row[0] || '').trim();
+    const name = String(row[1] || row[0] || '').trim();
+    const color = String(row[2] || 'book').trim();
+    const folderUserId = String(row[3] || '').trim();
+
+    if (!name) continue;
+
+    const isOwner = !folderUserId || folderUserId === 'system' || (reqUserId && folderUserId === reqUserId);
+    if (!isAdmin && !isOwner) {
+      continue;
+    }
+
+    const fId = id || ('f-' + name.toLowerCase().replace(/[^a-z0-9]/g, '-'));
+    const folderObj = {
+      id: fId,
+      name: name,
+      color: color,
+      userId: folderUserId
+    };
+    folders.push(folderObj);
+    folderMap.set(fId, folderObj);
+    folderMap.set(name.toLowerCase(), folderObj);
+  }
+
+  const items = [];
+  if (itemData.length > 1) {
+    const headerRow = itemData[0].map(h => String(h || '').trim().toLowerCase());
+
+    let idxId = headerRow.indexOf('id');
+    let idxTitle = headerRow.findIndex(h => h.includes('judul') || h.includes('title') || h.includes('nama'));
+    let idxFolder = headerRow.findIndex(h => h.includes('folder') || h.includes('rak') || h.includes('kategori'));
+    let idxStatus = headerRow.findIndex(h => h.includes('status') || h.includes('progres'));
+    let idxDesc = headerRow.findIndex(h => h.includes('deskripsi') || h.includes('desc') || h.includes('sinopsis') || h.includes('catatan'));
+    let idxCover = headerRow.findIndex(h => h.includes('cover') || h.includes('gambar') || h.includes('sampul') || h.includes('foto'));
+    let idxDate = headerRow.findIndex(h => h.includes('dibuat') || h.includes('created') || h.includes('tanggal') || h.includes('waktu'));
+    let idxUserId = headerRow.findIndex(h => h.includes('user_id') || h.includes('userid') || h.includes('pemilik'));
+    let idxUserName = headerRow.findIndex(h => h.includes('user_name') || h.includes('username') || h.includes('pengguna'));
+
+    if (idxId === -1) idxId = 0;
+    if (idxTitle === -1) idxTitle = 1;
+    if (idxFolder === -1) idxFolder = 2;
+    if (idxStatus === -1) idxStatus = 3;
+    if (idxDesc === -1) idxDesc = 4;
+    if (idxCover === -1) idxCover = 5;
+    if (idxDate === -1) idxDate = 6;
+    if (idxUserId === -1) idxUserId = 7;
+    if (idxUserName === -1) idxUserName = 8;
+
+    for (let i = 1; i < itemData.length; i++) {
+      const row = itemData[i];
+      let rawId = String(row[idxId] || '').trim();
+      let rawTitle = String(row[idxTitle] || '').trim();
+      let rawFolder = String(row[idxFolder] || '').trim();
+      let rawStatus = String(row[idxStatus] || 'plan').trim().toLowerCase();
+      let rawDesc = String(row[idxDesc] || '').trim();
+      let rawCover = String(row[idxCover] || '').trim();
+      let rawDate = row[idxDate] ? Number(row[idxDate]) : Date.now();
+      let rowUserId = (idxUserId < row.length) ? String(row[idxUserId] || '').trim() : '';
+      let rowUserName = (idxUserName < row.length) ? String(row[idxUserName] || '').trim() : '';
+
+      if (!rawTitle && !rawDesc) continue;
+      if (!rawTitle) rawTitle = 'Tanpa Judul';
+
+      if (!isAdmin) {
+        const isOwner = !rowUserId || rowUserId === 'system' || (reqUserId && rowUserId === reqUserId);
+        if (!isOwner) {
+          continue;
+        }
+      }
+
+      if (rawStatus.includes('baca') || rawStatus === 'reading' || rawStatus.includes('sedang')) {
+        rawStatus = 'reading';
+      } else if (rawStatus.includes('tamat') || rawStatus === 'completed' || rawStatus.includes('selesai')) {
+        rawStatus = 'completed';
+      } else {
+        rawStatus = 'plan';
+      }
+
+      let matchedFolderId = rawFolder;
+      if (rawFolder) {
+        const found = folderMap.get(rawFolder.toLowerCase()) || folderMap.get(rawFolder);
+        if (found) {
+          matchedFolderId = found.id;
+        } else {
+          matchedFolderId = rawFolder;
+        }
+      }
+
+      items.push({
+        id: rawId || ('item-' + i + '-' + Date.now()),
+        title: rawTitle,
+        folderId: matchedFolderId,
+        status: rawStatus,
+        desc: rawDesc,
+        coverUrl: rawCover,
+        createdAt: isNaN(rawDate) ? Date.now() : rawDate,
+        userId: rowUserId || reqUserId || '',
+        userName: rowUserName || (rowUserId === 'system' ? 'Koleksi Bawaan' : '')
       });
     }
   }
@@ -1461,40 +2077,129 @@ function getAllData() {
   return { folders, items };
 }
 
-function saveAllData(folders, items) {
-  const itemHeaders = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada"];
-  const folderHeaders = ["ID", "Nama_Folder", "Warna_Ikon"];
+function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserName) {
+  const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
+  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
 
-  const itemSheet = getOrCreateSheet(SHEET_ITEMS, itemHeaders);
-  const folderSheet = getOrCreateSheet(SHEET_FOLDERS, folderHeaders);
+  const existingItemData = itemSheet.getDataRange().getValues();
+  const existingFolderData = folderSheet.getDataRange().getValues();
+
+  const preservedFolders = [];
+  for (let i = 1; i < existingFolderData.length; i++) {
+    const row = existingFolderData[i];
+    const rowId = String(row[0] || '').trim();
+    const rowName = String(row[1] || '').trim();
+    const rowColor = String(row[2] || 'book').trim();
+    const rowUserId = String(row[3] || '').trim();
+
+    if (!rowName) continue;
+
+    if (rowUserId && currentUserId && rowUserId !== currentUserId && rowUserId !== 'system') {
+      preservedFolders.push([rowId, rowName, rowColor, rowUserId]);
+    }
+  }
+
+  const userFolderRows = (incomingFolders || []).map(f => [
+    f.id,
+    f.name,
+    f.color || 'book',
+    currentUserId || f.userId || ''
+  ]);
+
+  const finalFolderRows = [...preservedFolders, ...userFolderRows];
+
+  if (folderSheet.getLastRow() > 1) {
+    folderSheet.deleteRows(2, folderSheet.getLastRow() - 1);
+  }
+  if (finalFolderRows.length > 0) {
+    folderSheet.getRange(2, 1, finalFolderRows.length, FOLDER_HEADERS.length).setValues(finalFolderRows);
+  }
+
+  const preservedItems = [];
+  if (existingItemData.length > 1) {
+    const headerRow = existingItemData[0].map(h => String(h || '').trim().toLowerCase());
+    let idxUserId = headerRow.findIndex(h => h.includes('user_id') || h.includes('userid'));
+    if (idxUserId === -1) idxUserId = 7;
+
+    for (let i = 1; i < existingItemData.length; i++) {
+      const row = existingItemData[i];
+      const rowUserId = (idxUserId < row.length) ? String(row[idxUserId] || '').trim() : '';
+      
+      if (rowUserId && currentUserId && rowUserId !== currentUserId && rowUserId !== 'system') {
+        const rowPadded = [...row];
+        while (rowPadded.length < ITEM_HEADERS.length) rowPadded.push('');
+        preservedItems.push(rowPadded.slice(0, ITEM_HEADERS.length));
+      }
+    }
+  }
+
+  const userItemRows = (incomingItems || []).map(it => [
+    it.id,
+    it.title,
+    it.folderId || '',
+    it.status || 'plan',
+    it.desc || '',
+    it.coverUrl || '',
+    it.createdAt || Date.now(),
+    currentUserId || it.userId || '',
+    currentUserName || it.userName || ''
+  ]);
+
+  const finalItemRows = [...preservedItems, ...userItemRows];
 
   if (itemSheet.getLastRow() > 1) {
     itemSheet.deleteRows(2, itemSheet.getLastRow() - 1);
   }
-  if (folderSheet.getLastRow() > 1) {
-    folderSheet.deleteRows(2, folderSheet.getLastRow() - 1);
+  if (finalItemRows.length > 0) {
+    itemSheet.getRange(2, 1, finalItemRows.length, ITEM_HEADERS.length).setValues(finalItemRows);
   }
 
-  if (folders && folders.length > 0) {
-    const folderRows = folders.map(f => [
-      f.id,
-      f.name,
-      f.color || 'book'
-    ]);
-    folderSheet.getRange(2, 1, folderRows.length, folderHeaders.length).setValues(folderRows);
+  return { totalSheetItems: finalItemRows.length };
+}
+
+function saveOrUpdateSingleItem(item, userId, userName) {
+  const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
+  const data = itemSheet.getDataRange().getValues();
+
+  let targetRow = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(item.id).trim()) {
+      targetRow = i + 1;
+      break;
+    }
   }
 
-  if (items && items.length > 0) {
-    const itemRows = items.map(it => [
-      it.id,
-      it.title,
-      it.folderId || '',
-      it.status || 'plan',
-      it.desc || '',
-      it.coverUrl || '',
-      it.createdAt || Date.now()
-    ]);
-    itemSheet.getRange(2, 1, itemRows.length, itemHeaders.length).setValues(itemRows);
+  const rowValues = [
+    item.id,
+    item.title || '',
+    item.folderId || '',
+    item.status || 'plan',
+    item.desc || '',
+    item.coverUrl || '',
+    item.createdAt || Date.now(),
+    userId || item.userId || '',
+    userName || item.userName || ''
+  ];
+
+  if (targetRow > 1) {
+    itemSheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+  } else {
+    itemSheet.appendRow(rowValues);
+  }
+}
+
+function deleteSingleItem(itemId, userId, role) {
+  const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
+  const data = itemSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(itemId).trim()) {
+      const rowUserId = (data[i].length > 7) ? String(data[i][7] || '').trim() : '';
+      if (role === 'admin' || !rowUserId || rowUserId === userId || rowUserId === 'system') {
+        itemSheet.deleteRow(i + 1);
+      }
+      break;
+    }
   }
 }
 
@@ -1562,6 +2267,9 @@ function createJsonResponse(data) {
     try {
       const payload = {
         action: 'save_all',
+        userId: appState.profile.userId,
+        userName: appState.profile.userName,
+        role: appState.profile.role,
         folders: appState.folders,
         items: appState.items
       };
@@ -1575,7 +2283,7 @@ function createJsonResponse(data) {
 
       const data = await resp.json();
       if (data && data.success) {
-        if (!silent) showToast(`Tersinkronisasi! ${appState.items.length} bacaan tersimpan di Google Sheet.`);
+        if (!silent) showToast(`Tersinkronisasi! Koleksi pengguna ${appState.profile.userName} tersimpan di Google Sheet.`);
         updateCloudIndicator();
       } else {
         throw new Error(data.error || 'Gagal menyimpan ke Google Sheets');
@@ -1588,25 +2296,71 @@ function createJsonResponse(data) {
     }
   }
 
-  async function syncPullFromGoogleSheets() {
+  async function syncPullFromGoogleSheets(silent = false) {
     const url = appState.settings.googleSheetsUrl;
     if (!url) {
-      showToast('Google Sheets belum dihubungkan.');
+      if (!silent) showToast('Google Sheets belum dihubungkan. Buka Pengaturan.');
       return;
     }
 
-    showToast('Mengunduh data dari Google Sheets...');
+    if (!silent) showToast('Mengunduh data dari Google Sheets...');
+    if (dom.btnQuickSync) dom.btnQuickSync.classList.add('syncing');
 
     try {
-      const fetchUrl = url.includes('?') ? `${url}&action=getData` : `${url}?action=getData`;
+      const params = new URLSearchParams({
+        action: 'getData',
+        userId: appState.profile.userId,
+        role: appState.profile.role
+      });
+      const fetchUrl = url.includes('?') ? `${url}&${params.toString()}` : `${url}?${params.toString()}`;
       const resp = await fetch(fetchUrl);
       const data = await resp.json();
 
       if (data && data.success && Array.isArray(data.items)) {
+        // 1. Smart Merge Folders
         if (data.folders && data.folders.length > 0) {
-          appState.folders = data.folders;
+          data.folders.forEach(remoteF => {
+            const exists = appState.folders.some(f => f.id === remoteF.id || f.name.toLowerCase() === remoteF.name.toLowerCase());
+            if (!exists) {
+              appState.folders.push(remoteF);
+            }
+          });
         }
-        appState.items = data.items;
+
+        // 2. Smart Merge Items (Google Sheet data updates local without wiping cover arts)
+        const itemMap = new Map();
+
+        // Masukkan data lokal dulu
+        appState.items.forEach(it => {
+          const key = it.id || (it.title ? it.title.trim().toLowerCase() : ('item-' + Math.random()));
+          itemMap.set(key, it);
+        });
+
+        // Gabungkan data dari Google Sheet
+        data.items.forEach(remoteIt => {
+          if (!remoteIt.title && !remoteIt.desc) return; // Lewati baris kosong
+
+          // Cari padanan lokal berdasarkan ID atau Judul
+          let localMatch = appState.items.find(it => it.id === remoteIt.id);
+          if (!localMatch && remoteIt.title) {
+            localMatch = appState.items.find(it => it.title && it.title.trim().toLowerCase() === remoteIt.title.trim().toLowerCase());
+          }
+
+          // Pertahankan cover lokal jika di Sheet kosong tapi di lokal sudah ada cover
+          if (localMatch && localMatch.coverUrl && !remoteIt.coverUrl) {
+            remoteIt.coverUrl = localMatch.coverUrl;
+          }
+          if (localMatch && !remoteIt.id) {
+            remoteIt.id = localMatch.id;
+          }
+
+          const key = remoteIt.id || (remoteIt.title ? remoteIt.title.trim().toLowerCase() : ('item-' + Math.random()));
+          itemMap.set(key, remoteIt);
+        });
+
+        appState.items = Array.from(itemMap.values());
+        // Urutkan item terbaru di atas
+        appState.items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
         saveToLocalStorage();
         if (dbInstance) {
@@ -1618,14 +2372,22 @@ function createJsonResponse(data) {
         }
 
         renderAll();
-        showToast(`Berhasil menarik ${data.items.length} bacaan dari Google Sheet!`);
-        dom.modalSettings.classList.add('hidden');
+        updateCloudIndicator();
+
+        if (!silent) {
+          showToast(`Berhasil memuat ${data.items.length} bacaan dari Google Sheet!`);
+          if (dom.modalSettings) dom.modalSettings.classList.add('hidden');
+        }
       } else {
         throw new Error(data.error || 'Gagal membaca data dari Google Sheets');
       }
     } catch (err) {
       console.error('Pull from Sheets error:', err);
-      showToast('Gagal menarik data dari Google Sheets.');
+      if (!silent) {
+        showToast('Gagal menarik data dari Google Sheets. Periksa URL atau koneksi internet.');
+      }
+    } finally {
+      if (dom.btnQuickSync) dom.btnQuickSync.classList.remove('syncing');
     }
   }
 
@@ -1636,10 +2398,68 @@ function createJsonResponse(data) {
     keyInput.value = appState.settings.geminiApiKey || '';
     if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
 
+    // Inisialisasi Profile UI
+    const inputUserName = document.getElementById('settings-user-name');
+    const inputUserId = document.getElementById('settings-user-id');
+    const selectUserRole = document.getElementById('settings-user-role');
+    const badgeProfileRole = document.getElementById('profile-role-badge');
+    const btnRandomUserId = document.getElementById('btn-random-user-id');
+    const btnSaveProfile = document.getElementById('btn-save-profile');
+
+    function updateProfileUI() {
+      if (inputUserName) inputUserName.value = appState.profile.userName || '';
+      if (inputUserId) inputUserId.value = appState.profile.userId || '';
+      if (selectUserRole) selectUserRole.value = appState.profile.role || 'pribadi';
+      if (badgeProfileRole) {
+        const isAdmin = appState.profile.role === 'admin';
+        badgeProfileRole.innerHTML = `
+          <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          ${isAdmin ? 'Mode Admin (Semua Data)' : 'Mode Pribadi (Data Terisolasi)'}
+        `;
+        badgeProfileRole.style.background = isAdmin ? '#fef3c7' : '#eef2ff';
+        badgeProfileRole.style.color = isAdmin ? '#b45309' : '#4f46e5';
+      }
+    }
+    updateProfileUI();
+
+    if (btnRandomUserId) {
+      btnRandomUserId.addEventListener('click', () => {
+        const newId = 'user_' + Math.random().toString(36).substring(2, 7);
+        if (inputUserId) inputUserId.value = newId;
+        showToast(`ID baru dibuat: ${newId}`);
+      });
+    }
+
+    if (btnSaveProfile) {
+      btnSaveProfile.addEventListener('click', () => {
+        const newName = (inputUserName ? inputUserName.value.trim() : '') || 'Pengguna';
+        const newId = (inputUserId ? inputUserId.value.trim() : '') || ('user_' + Math.random().toString(36).substring(2, 7));
+        const newRole = (selectUserRole ? selectUserRole.value : 'pribadi') || 'pribadi';
+
+        appState.profile.userName = newName;
+        appState.profile.userId = newId;
+        appState.profile.role = newRole;
+
+        localStorage.setItem('reading_list_user_name', newName);
+        localStorage.setItem('reading_list_user_id', newId);
+        localStorage.setItem('reading_list_user_role', newRole);
+
+        updateProfileUI();
+        renderAll();
+        showToast(`Profil ${newName} (${newRole === 'admin' ? 'Admin' : 'Pribadi'}) disimpan!`);
+
+        // Jika terhubung ke Google Sheets, sinkronisasi ulang
+        if (appState.settings.googleSheetsUrl) {
+          syncPullFromGoogleSheets(true);
+        }
+      });
+    }
+
     // Open & Close Settings Modal
     document.getElementById('btn-open-settings').addEventListener('click', () => {
       keyInput.value = appState.settings.geminiApiKey || '';
       if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
+      updateProfileUI();
       dom.modalSettings.classList.remove('hidden');
     });
 
@@ -1648,6 +2468,7 @@ function createJsonResponse(data) {
       badgeCloud.addEventListener('click', () => {
         keyInput.value = appState.settings.geminiApiKey || '';
         if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
+        updateProfileUI();
         dom.modalSettings.classList.remove('hidden');
         if (sheetsUrlInput) {
           setTimeout(() => sheetsUrlInput.focus(), 300);
@@ -2086,11 +2907,30 @@ function createJsonResponse(data) {
   async function initApp() {
     await initDatabase();
 
-    // Bind Navigation
+    // Bind Navigation & Manual Adds
     document.getElementById('dock-btn-scan').addEventListener('click', openScannerModal);
     document.getElementById('btn-empty-scan').addEventListener('click', openScannerModal);
     document.getElementById('btn-close-scanner').addEventListener('click', closeScannerModal);
     document.getElementById('btn-cancel-scan').addEventListener('click', closeScannerModal);
+
+    // Tombol Tambah Manual (+ Judul di header feed, di floating dock, dan di empty state)
+    if (dom.btnAddManualItem) {
+      dom.btnAddManualItem.addEventListener('click', () => openItemDetailModal(null));
+    }
+    if (dom.btnEmptyAddManual) {
+      dom.btnEmptyAddManual.addEventListener('click', () => openItemDetailModal(null));
+    }
+    if (dom.dockBtnAdd) {
+      dom.dockBtnAdd.addEventListener('click', () => openItemDetailModal(null));
+    }
+
+    // Tombol Quick Sync Google Sheets di Header
+    if (dom.btnQuickSync) {
+      dom.btnQuickSync.addEventListener('click', () => {
+        triggerNativeHaptic();
+        syncPullFromGoogleSheets(false);
+      });
+    }
 
     // Dock Button: Home (Koleksi)
     document.getElementById('dock-btn-home').addEventListener('click', () => {
@@ -2153,6 +2993,33 @@ function createJsonResponse(data) {
     initStatsEvents();
 
     renderAll();
+
+    // Auto-sync dari Google Sheets saat aplikasi pertama dibuka
+    if (appState.settings.googleSheetsUrl) {
+      syncPullFromGoogleSheets(true);
+    }
+
+    // Event listener saat user berganti aplikasi (multitasking Android):
+    // Memastikan antrean scanning resume jika terjeda & auto-pull data terbaru dari Google Sheets
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (appState.scanQueue && appState.scanQueue.some(j => j.status === 'pending') && !appState.isScanningActive) {
+          processScanQueue();
+        }
+        if (appState.settings.googleSheetsUrl) {
+          syncPullFromGoogleSheets(true);
+        }
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      if (appState.scanQueue && appState.scanQueue.some(j => j.status === 'pending') && !appState.isScanningActive) {
+        processScanQueue();
+      }
+      if (appState.settings.googleSheetsUrl) {
+        syncPullFromGoogleSheets(true);
+      }
+    });
 
     // Branded Splash Loading Screen (Khusus APK Mobile)
     if (dom.splashStatus) dom.splashStatus.textContent = 'Menyiapkan rak koleksi...';

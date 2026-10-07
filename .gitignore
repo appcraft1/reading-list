@@ -2,6 +2,18 @@
 node_modules/
 package-lock.json
 
+# Environment & Secrets (Keamanan Kredensial)
+.env
+.env.*
+*.env
+*.keystore
+*.jks
+*.p8
+*.p12
+*.pem
+private_key.json
+google-services.json
+
 # Vault & External references
 referensi/
 
@@ -16,6 +28,7 @@ android/app/*.iml
 local.properties
 .gradle/
 build/
+*.apk
 
 # OS files
 Thumbs.db

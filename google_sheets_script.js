@@ -25,16 +25,18 @@
 
 const SHEET_ITEMS = "Koleksi_Bacaan";
 const SHEET_FOLDERS = "Folder_Rak";
+const SHEET_USERS = "Pengguna_Akun";
 
 const ITEM_HEADERS = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada", "User_ID", "User_Name"];
-const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID"];
+const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID", "Icon_Key"];
+const USER_HEADERS = ["User_ID", "Username", "Nama", "Password_Hash", "Role", "Dibuat_Pada"];
 
 // Data Bawaan Sistem (Inisialisasi Otomatis Saat Spreadsheet Masih Kosong)
 const DUMMY_FOLDERS = [
-  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', userId: 'system' },
-  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', userId: 'system' },
-  { id: 'f-anime',  name: 'Anime & Film', color: 'film', userId: 'system' },
-  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', userId: 'system' }
+  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', userId: 'system', icon: 'flame' },
+  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', userId: 'system', icon: 'book' },
+  { id: 'f-anime',  name: 'Anime & Film', color: 'film', userId: 'system', icon: 'film' },
+  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', userId: 'system', icon: 'leaf' }
 ];
 
 const DUMMY_ITEMS = [
@@ -119,10 +121,12 @@ function onOpen() {
 function setupDatabase() {
   const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
   const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
+  const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
 
-  // Upgrade header sheet lama jika belum memiliki kolom User_ID
+  // Upgrade header sheet lama jika belum memiliki kolom User_ID atau Icon_Key
   upgradeSheetHeaders(itemSheet, ITEM_HEADERS);
   upgradeSheetHeaders(folderSheet, FOLDER_HEADERS);
+  upgradeSheetHeaders(userSheet, USER_HEADERS);
 
   // Jika masih kosong (hanya ada baris header), isi data awal
   if (itemSheet.getLastRow() <= 1 && folderSheet.getLastRow() <= 1) {
@@ -197,6 +201,70 @@ function doPost(e) {
     const role = String(body.role || 'pribadi').trim();
 
     setupDatabase();
+
+    // =========================================================================
+    // AUTH: REGISTRASI & LOGIN AKUN PENGGUNA
+    // =========================================================================
+    if (action === 'auth_register') {
+      const username = String(body.username || '').trim().toLowerCase();
+      const password = String(body.password || '').trim();
+      const name = String(body.name || username).trim();
+      const userRole = String(body.role || 'pribadi').trim();
+
+      if (!username || !password) {
+        return createJsonResponse({ success: false, error: 'Username dan PIN / Password wajib diisi.' });
+      }
+
+      const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+      const userData = userSheet.getDataRange().getValues();
+
+      for (let i = 1; i < userData.length; i++) {
+        if (String(userData[i][1] || '').trim().toLowerCase() === username) {
+          return createJsonResponse({ success: false, error: 'Username sudah digunakan oleh akun lain. Silakan pakai username berbeda.' });
+        }
+      }
+
+      const newUserId = 'usr_' + username.replace(/[^a-z0-9]/g, '') + '_' + Math.random().toString(36).substring(2, 6);
+      userSheet.appendRow([newUserId, username, name, password, userRole, Date.now()]);
+
+      return createJsonResponse({
+        success: true,
+        message: 'Registrasi akun berhasil!',
+        user: { userId: newUserId, username: username, name: name, role: userRole }
+      });
+    }
+
+    if (action === 'auth_login') {
+      const username = String(body.username || '').trim().toLowerCase();
+      const password = String(body.password || '').trim();
+
+      const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+      const userData = userSheet.getDataRange().getValues();
+
+      for (let i = 1; i < userData.length; i++) {
+        const rowUsername = String(userData[i][1] || '').trim().toLowerCase();
+        const rowPassword = String(userData[i][3] || '').trim();
+        if (rowUsername === username) {
+          if (rowPassword === password) {
+            const foundUser = {
+              userId: String(userData[i][0] || '').trim(),
+              username: rowUsername,
+              name: String(userData[i][2] || rowUsername).trim(),
+              role: String(userData[i][4] || 'pribadi').trim()
+            };
+            return createJsonResponse({
+              success: true,
+              message: 'Login berhasil!',
+              user: foundUser
+            });
+          } else {
+            return createJsonResponse({ success: false, error: 'PIN / Password salah.' });
+          }
+        }
+      }
+
+      return createJsonResponse({ success: false, error: 'Akun dengan username tersebut belum terdaftar. Silakan pilih tab Daftar Akun.' });
+    }
 
     if (action === 'save_all') {
       const folders = body.folders || [];
@@ -300,6 +368,7 @@ function getAllData(reqUserId, reqRole) {
       id: fId,
       name: name,
       color: color,
+      icon: (row.length > 4 && row[4]) ? String(row[4]).trim() : (color || 'book'),
       userId: folderUserId
     };
     folders.push(folderObj);
@@ -416,12 +485,13 @@ function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserN
     const rowName = String(row[1] || '').trim();
     const rowColor = String(row[2] || 'book').trim();
     const rowUserId = String(row[3] || '').trim();
+    const rowIcon = (row.length > 4 && row[4]) ? String(row[4]).trim() : (rowColor || 'book');
 
     if (!rowName) continue;
 
     // Jika folder ini milik pengguna LAIN, pertahankan!
     if (rowUserId && currentUserId && rowUserId !== currentUserId && rowUserId !== 'system') {
-      preservedFolders.push([rowId, rowName, rowColor, rowUserId]);
+      preservedFolders.push([rowId, rowName, rowColor, rowUserId, rowIcon]);
     }
   }
 
@@ -430,7 +500,8 @@ function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserN
     f.id,
     f.name,
     f.color || 'book',
-    currentUserId || f.userId || ''
+    currentUserId || f.userId || '',
+    f.icon || f.color || 'book'
   ]);
 
   const finalFolderRows = [...preservedFolders, ...userFolderRows];

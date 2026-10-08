@@ -111,10 +111,28 @@
                 <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
               </button>
             </div>
-            <select id="sort-select" class="sort-select-pill" aria-label="Urutkan Koleksi">
-              <option value="recent">Terbaru</option>
-              <option value="title">Abjad (A-Z)</option>
-            </select>
+            <!-- Custom APK Dropdown for Sort -->
+            <div class="custom-apk-dropdown" id="apk-dropdown-sort">
+              <select id="sort-select" class="sort-select-pill visually-hidden" aria-label="Urutkan Koleksi">
+                <option value="recent">Terbaru</option>
+                <option value="title">Abjad (A-Z)</option>
+              </select>
+              <button type="button" class="apk-dropdown-trigger sort-trigger" id="btn-trigger-sort" aria-haspopup="listbox">
+                <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+                <span class="apk-dropdown-label" id="sort-display-label">Terbaru</span>
+                <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="apk-dropdown-menu hidden" id="menu-dropdown-sort">
+                <div class="apk-dropdown-item active" data-value="recent">
+                  <span class="apk-dropdown-item-text">Terbaru</span>
+                  <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="apk-dropdown-item" data-value="title">
+                  <span class="apk-dropdown-item-text">Abjad (A-Z)</span>
+                  <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -223,27 +241,38 @@
           </div>
         </div>
 
-        <!-- Processing State (Dengan tombol Minimize / Jalankan di Latar Belakang) -->
+        <!-- Processing State (RAPI, BEBAS SCROLLBAR, TAMPILAN HUD ELEGAN) -->
         <div class="scanner-processing hidden" id="scanner-processing">
-          <div class="scan-preview-canvas-wrap">
-            <img id="scan-preview-img" src="" alt="Preview Scan" />
-            <div class="scan-laser-line"></div>
-          </div>
-          <div class="processing-meta">
-            <div class="spinner-neon"></div>
-            <h4 class="processing-title" id="scan-processing-title">Gemini 3.8 Sedang Membaca Screenshot...</h4>
-            <p class="processing-desc" id="scan-status-ticker">Mengekstrak judul, deskripsi, dan memotong gambar cover...</p>
-            
-            <div class="queue-progress-bar-wrap" id="queue-progress-wrap">
-              <div class="queue-progress-bar" id="queue-progress-bar" style="width: 0%"></div>
+          <div class="scan-processing-hud">
+            <div class="scan-preview-canvas-wrap">
+              <img id="scan-preview-img" src="" alt="Preview Scan" />
+              <div class="scan-laser-line"></div>
+              <div class="scan-hud-tag">
+                <span class="scan-hud-pulse"></span>
+                <span>Gemini 3.8 Flash Vision</span>
+              </div>
             </div>
-            <span class="queue-count-badge" id="queue-count-badge">Foto 1 dari 1</span>
+            
+            <div class="processing-meta">
+              <div class="processing-title-row">
+                <div class="spinner-neon-sm"></div>
+                <h4 class="processing-title" id="scan-processing-title">Memproses Screenshot...</h4>
+              </div>
+              <p class="processing-desc" id="scan-status-ticker">Mengekstrak judul & auto-crop sampul...</p>
+              
+              <div class="queue-progress-bar-wrap" id="queue-progress-wrap">
+                <div class="queue-progress-bar" id="queue-progress-bar" style="width: 0%"></div>
+              </div>
+              <span class="queue-count-badge" id="queue-count-badge">Foto 1 dari 1 (0%)</span>
 
-            <button type="button" class="btn btn-secondary btn-sm mt-3" id="btn-minimize-scanner">
-              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-              Jalankan di Latar Belakang (Minimize)
-            </button>
-            <span class="field-hint text-center" style="margin-top:6px;">Proses tetap aman berjalan jika lo ganti aplikasi lain atau buka koleksi.</span>
+              <div class="processing-action-wrap">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-minimize-scanner">
+                  <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                  Jalankan di Latar Belakang (Minimize)
+                </button>
+              </div>
+              <span class="field-hint text-center">Proses tetap aman berjalan jika lo ganti aplikasi lain atau buka koleksi.</span>
+            </div>
           </div>
         </div>
 
@@ -256,10 +285,20 @@
             </div>
             <div class="results-actions-right">
               <div class="results-folder-select-wrap">
-                <label for="results-target-folder" class="field-label-sm">Folder:</label>
-                <select id="results-target-folder" class="input-select-sm">
-                  <!-- Populated dynamically -->
-                </select>
+                <label class="field-label-sm">Folder:</label>
+                <!-- Custom APK Dropdown for Target Folder -->
+                <div class="custom-apk-dropdown" id="apk-dropdown-results-folder">
+                  <select id="results-target-folder" class="visually-hidden">
+                    <!-- Populated dynamically -->
+                  </select>
+                  <button type="button" class="apk-dropdown-trigger sm" id="btn-trigger-results-folder">
+                    <span class="apk-dropdown-label" id="results-folder-display-label">Pilih Folder</span>
+                    <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="apk-dropdown-menu hidden" id="menu-dropdown-results-folder">
+                    <!-- Dynamic options -->
+                  </div>
+                </div>
               </div>
               <button type="button" class="btn btn-secondary btn-sm" id="btn-add-scan-result">
                 <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -321,19 +360,51 @@
 
         <div class="form-row-2">
           <div class="form-group">
-            <label for="item-folder-select" class="field-label">Folder / Rak</label>
-            <select id="item-folder-select" class="form-select">
-              <!-- Populated dynamically -->
-            </select>
+            <label class="field-label">Folder / Rak</label>
+            <div class="custom-apk-dropdown" id="apk-dropdown-item-folder">
+              <select id="item-folder-select" class="form-select visually-hidden">
+                <!-- Populated dynamically -->
+              </select>
+              <button type="button" class="apk-dropdown-trigger" id="btn-trigger-item-folder">
+                <span class="apk-dropdown-label" id="item-folder-display-label">Pilih Folder</span>
+                <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="apk-dropdown-menu hidden" id="menu-dropdown-item-folder">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
-            <label for="item-status-select" class="field-label">Status</label>
-            <select id="item-status-select" class="form-select">
-              <option value="plan">Ingin Dibaca</option>
-              <option value="reading">Sedang Dibaca</option>
-              <option value="completed">Selesai</option>
-            </select>
+            <label class="field-label">Status</label>
+            <div class="custom-apk-dropdown" id="apk-dropdown-item-status">
+              <select id="item-status-select" class="form-select visually-hidden">
+                <option value="plan">Ingin Dibaca</option>
+                <option value="reading">Sedang Dibaca</option>
+                <option value="completed">Selesai</option>
+              </select>
+              <button type="button" class="apk-dropdown-trigger" id="btn-trigger-item-status">
+                <span class="apk-dropdown-label" id="item-status-display-label">Ingin Dibaca</span>
+                <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="apk-dropdown-menu hidden" id="menu-dropdown-item-status">
+                <div class="apk-dropdown-item active" data-value="plan">
+                  <span class="status-indicator-dot dot-plan"></span>
+                  <span class="apk-dropdown-item-text">Ingin Dibaca</span>
+                  <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="apk-dropdown-item" data-value="reading">
+                  <span class="status-indicator-dot dot-reading"></span>
+                  <span class="apk-dropdown-item-text">Sedang Dibaca</span>
+                  <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="apk-dropdown-item" data-value="completed">
+                  <span class="status-indicator-dot dot-completed"></span>
+                  <span class="apk-dropdown-item-text">Selesai</span>
+                  <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -354,7 +425,7 @@
   </div>
 
   <!-- =========================================================================
-       6. MODAL: FOLDER BARU / EDIT FOLDER
+       6. MODAL: FOLDER BARU / EDIT FOLDER (12 WARNA & 12 IKON PREMIUM SVG)
        ========================================================================= -->
   <div class="modal-backdrop hidden" id="modal-folder">
     <div class="modal-card modal-sm">
@@ -365,20 +436,94 @@
 
       <form id="form-folder" class="modal-body form-grid">
         <input type="hidden" id="folder-id-hidden">
+        <input type="hidden" id="folder-icon-input" value="flame">
+        <input type="hidden" id="folder-color-input" value="flame">
+
+        <!-- Live Preview Bento Card -->
+        <div class="folder-preview-wrap">
+          <span class="field-label" style="margin-bottom:6px;">Pratinjau Rak Koleksi:</span>
+          <div class="visual-folder-card preview-card" id="folder-live-preview">
+            <div class="folder-icon-circle" id="preview-folder-icon-box" style="background:#fff1f2; color:#f43f5e;">
+              <!-- Dynamic Icon SVG -->
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            </div>
+            <div>
+              <span class="folder-name-text" id="preview-folder-name">Nama Folder</span>
+              <span class="folder-meta-text">0 Judul</span>
+            </div>
+          </div>
+        </div>
 
         <div class="form-group">
           <label for="folder-name-input" class="field-label">Nama Folder <span class="text-danger">*</span></label>
           <input type="text" id="folder-name-input" class="form-input" placeholder="Misal: Top 10 Manhwa Action" required>
         </div>
 
+        <!-- 12 Premium Bespoke SVG Icons Picker -->
         <div class="form-group">
-          <label class="field-label">Ikon & Tema Folder</label>
-          <div class="color-palette-picker" id="folder-color-picker">
-            <button type="button" class="color-dot active" data-color="flame" style="--c: #f43f5e" title="Api / Action"></button>
-            <button type="button" class="color-dot" data-color="book" style="--c: #4f46e5" title="Buku / Novel"></button>
-            <button type="button" class="color-dot" data-color="film" style="--c: #9333ea" title="Film / Anime"></button>
-            <button type="button" class="color-dot" data-color="leaf" style="--c: #059669" title="Santai / Slice of Life"></button>
-            <button type="button" class="color-dot" data-color="star" style="--c: #d97706" title="Favorit"></button>
+          <div class="field-header-row">
+            <label class="field-label">Pilih Ikon Premium (12 Ikon)</label>
+            <span class="field-label-tag" id="label-active-icon">Api / Action</span>
+          </div>
+          <div class="folder-icons-grid" id="folder-icon-picker">
+            <button type="button" class="folder-icon-btn active" data-icon="flame" title="Api / Action">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="book" title="Buku / Novel">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="film" title="Film / Anime">
+              <svg class="svg-icon" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><line x1="7" x2="7" y1="2" y2="22"/><line x1="17" x2="17" y1="2" y2="22"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="2" x2="7" y1="7" y2="7"/><line x1="2" x2="7" y1="17" y2="17"/><line x1="17" x2="22" y1="17" y2="17"/><line x1="17" x2="22" y1="7" y2="7"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="leaf" title="Santai / Slice of Life">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="star" title="Favorit">
+              <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="bookmark" title="Bookmark / Ditandai">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="heart" title="Wishlist / Romantis">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="sparkles" title="Sihir / Magic / Fantasi">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="compass" title="Petualangan / Ekspedisi">
+              <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="trophy" title="Terbaik / Peringkat Atas">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v3h10v-3c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="food" title="Kuliner / Resep / Bahan Masakan">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5v1h10V7a5 5 0 0 0-5-5Z"/><path d="M3 11h18a9 9 0 0 1-18 0Z"/><line x1="12" y1="20" x2="12" y2="22"/></svg>
+            </button>
+            <button type="button" class="folder-icon-btn" data-icon="diamond" title="Premium / Koleksi Khusus">
+              <svg class="svg-icon" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9Z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 12 Luxury Colors Palette Picker -->
+        <div class="form-group">
+          <div class="field-header-row">
+            <label class="field-label">Pilihan Warna Tema (12 Warna)</label>
+            <span class="field-label-tag" id="label-active-color">Rose Flame</span>
+          </div>
+          <div class="color-palette-picker grid-12" id="folder-color-picker">
+            <button type="button" class="color-dot active" data-color="flame" style="--c: #f43f5e" title="Rose Flame"></button>
+            <button type="button" class="color-dot" data-color="book" style="--c: #4f46e5" title="Royal Indigo"></button>
+            <button type="button" class="color-dot" data-color="film" style="--c: #9333ea" title="Violet Amethyst"></button>
+            <button type="button" class="color-dot" data-color="leaf" style="--c: #059669" title="Emerald Mint"></button>
+            <button type="button" class="color-dot" data-color="star" style="--c: #d97706" title="Amber Gold"></button>
+            <button type="button" class="color-dot" data-color="cyan" style="--c: #0891b2" title="Ocean Cyan"></button>
+            <button type="button" class="color-dot" data-color="sunset" style="--c: #ea580c" title="Sunset Coral"></button>
+            <button type="button" class="color-dot" data-color="teal" style="--c: #0d9488" title="Teal Forest"></button>
+            <button type="button" class="color-dot" data-color="pink" style="--c: #db2777" title="Magenta Pink"></button>
+            <button type="button" class="color-dot" data-color="purple" style="--c: #7c3aed" title="Electric Purple"></button>
+            <button type="button" class="color-dot" data-color="crimson" style="--c: #dc2626" title="Crimson Ruby"></button>
+            <button type="button" class="color-dot" data-color="slate" style="--c: #334155" title="Dark Slate"></button>
           </div>
         </div>
 
@@ -421,46 +566,40 @@
             <input type="password" id="settings-gemini-key" class="form-input" placeholder="AIzaSy...">
             <span class="field-hint">Tersimpan aman di local HP lo (Offline-First).</span>
           </div>
-          <button type="button" class="btn btn-primary btn-sm" id="btn-save-gemini-key">Simpan & Aktifkan Key</button>
+          <div class="settings-actions-grid mt-2">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-save-gemini-key">Simpan & Aktifkan Key</button>
+          </div>
         </div>
 
-        <!-- Profil Pengguna & Multi-User Box -->
-        <div class="settings-box">
+        <!-- Akun Pengguna Aktif (Dikelola Otomatis di Database & Halaman Login) -->
+        <div class="settings-box settings-account-card">
           <div class="settings-box-header">
-            <div class="pill-chip" id="profile-role-badge" style="background:#eef2ff; color:#4f46e5;">
+            <div class="pill-chip" id="settings-role-badge" style="background:#eef2ff; color:#4f46e5;">
               <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               Mode Pribadi
             </div>
-            <h4 class="settings-box-title">Profil & Multi-User (1 Database)</h4>
+            <h4 class="settings-box-title">Akun & Sesi Login</h4>
           </div>
-          <p class="settings-box-desc">
-            Dua orang atau lebih dapat memakai URL Google Sheet yang sama. Data lo dan teman lo tetap terpisah otomatis dan tidak saling menimpa.
+          <div class="account-card-body">
+            <div class="account-avatar-circle" id="settings-avatar-badge">P</div>
+            <div class="account-details">
+              <span class="account-title-name" id="settings-display-name">Pengguna</span>
+              <span class="account-meta-user" id="settings-display-username">@user_default</span>
+            </div>
+          </div>
+          <p class="settings-box-desc" style="margin-top: 10px; margin-bottom: 12px;">
+            Setiap user memiliki koleksi terisolasi di database yang sama. Masuk atau daftar akun baru untuk berpindah koleksi.
           </p>
-          <div class="form-row" style="display:flex; gap:10px; flex-wrap:wrap;">
-            <div class="form-group" style="flex:1; min-width:140px;">
-              <label for="settings-user-name" class="field-label">Nama Pengguna</label>
-              <input type="text" id="settings-user-name" class="form-input" placeholder="Misal: Asep">
-            </div>
-            <div class="form-group" style="flex:1; min-width:140px;">
-              <label for="settings-user-id" class="field-label">ID Akun (Unik)</label>
-              <div style="display:flex; gap:6px;">
-                <input type="text" id="settings-user-id" class="form-input" placeholder="user_asep">
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-random-user-id" title="Acak ID Baru" style="flex-shrink:0;">🎲 Acak</button>
-              </div>
-            </div>
+          <div class="settings-actions-grid">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-open-auth-modal">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Ganti Akun / Masuk
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm text-danger" id="btn-logout-auth">
+              <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Keluar
+            </button>
           </div>
-          <div class="form-group mt-2">
-            <label for="settings-user-role" class="field-label">Peran / Hak Akses Database</label>
-            <select id="settings-user-role" class="form-select">
-              <option value="pribadi">Pengguna Pribadi (Hanya menampilkan koleksi saya)</option>
-              <option value="admin">Admin / Perpustakaan Bersama (Akses semua data anggota)</option>
-            </select>
-            <span class="field-hint">Pilih "Pengguna Pribadi" agar data tidak bercampur dengan teman lo.</span>
-          </div>
-          <button type="button" class="btn btn-primary btn-sm mt-2" id="btn-save-profile">
-            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            Simpan Profil Pengguna
-          </button>
         </div>
 
         <!-- Google Sheets Cloud Database Box -->
@@ -473,14 +612,14 @@
             <h4 class="settings-box-title">Database Google Sheets (Cloud Sync)</h4>
           </div>
           <p class="settings-box-desc">
-            Hubungkan aplikasi ke Google Spreadsheet pribadi Anda. Semua koleksi dan rak bacaan akan otomatis tersinkronisasi di cloud secara gratis tanpa biaya server.
+            Hubungkan aplikasi ke Google Spreadsheet bersama atau pribadi. Semua koleksi dan akun akan tersinkronisasi di cloud secara gratis tanpa biaya server.
           </p>
           <div class="form-group">
             <label for="settings-sheets-url" class="field-label">URL Web App Google Apps Script</label>
             <input type="url" id="settings-sheets-url" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
             <span class="field-hint">Dapatkan URL dari deploy Web App spreadsheet Google Anda.</span>
           </div>
-          <div class="flex-gap mt-2 flex-wrap">
+          <div class="settings-actions-grid mt-2">
             <button type="button" class="btn btn-primary btn-sm" id="btn-save-sheets-url">
               <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
               Simpan & Hubungkan
@@ -519,7 +658,7 @@
         <div class="settings-box">
           <h4 class="settings-box-title">Cadangkan & Pulihkan Data</h4>
           <p class="settings-box-desc">Seluruh daftar bacaan tersimpan aman di HP lo. Lo bisa ekspor data ini sebagai file JSON kapan saja.</p>
-          <div class="flex-gap mt-2">
+          <div class="settings-actions-grid mt-2">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-export-json">
               <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Ekspor JSON
@@ -536,7 +675,7 @@
         <div class="settings-box">
           <h4 class="settings-box-title">Data Koleksi</h4>
           <p class="settings-box-desc">Reset atau muat ulang koleksi contoh bacaan.</p>
-          <div class="flex-gap mt-2">
+          <div class="settings-actions-grid mt-2">
             <button type="button" class="btn btn-ghost btn-sm" id="btn-load-sample-data">Muat Contoh Manhwa</button>
             <button type="button" class="btn btn-ghost btn-sm text-danger" id="btn-reset-all-data">Reset Semua Data</button>
           </div>
@@ -546,6 +685,92 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-primary ml-auto" id="btn-done-settings">Selesai</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       8. MODAL: LOGIN & REGISTER PENGGUNA (AKUN TERPISAH 1 DATABASE)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modal-auth" style="z-index: 10020;">
+    <div class="modal-card modal-sm modal-auth-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge" style="background:#eef2ff; color:#4f46e5;">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <h3 class="modal-title">Akun Reading List</h3>
+            <span class="modal-subtitle">Data bacaan otomatis terpisah per akun</span>
+          </div>
+        </div>
+        <button type="button" class="icon-btn close-modal-btn" id="btn-close-auth" aria-label="Tutup">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Auth Tabs (Masuk vs Daftar) -->
+        <div class="auth-tabs-segmented" role="tablist">
+          <button type="button" class="auth-tab-btn active" id="tab-auth-login" role="tab" aria-selected="true">Masuk</button>
+          <button type="button" class="auth-tab-btn" id="tab-auth-register" role="tab" aria-selected="false">Daftar Baru</button>
+        </div>
+
+        <!-- Panel 1: Form Login -->
+        <form id="form-auth-login" class="form-grid mt-3">
+          <div class="form-group">
+            <label for="login-username" class="field-label">Username <span class="text-danger">*</span></label>
+            <input type="text" id="login-username" class="form-input" placeholder="Misal: asep" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password" class="field-label">PIN / Kata Sandi <span class="text-danger">*</span></label>
+            <input type="password" id="login-password" class="form-input" placeholder="Masukkan PIN atau password" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary mt-2" id="btn-submit-login" style="width: 100%;">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Masuk ke Akun
+          </button>
+          <p class="auth-switch-prompt">
+            Belum punya akun? <a href="#" id="link-switch-to-register">Daftar sekarang &rarr;</a>
+          </p>
+        </form>
+
+        <!-- Panel 2: Form Register -->
+        <form id="form-auth-register" class="form-grid mt-3 hidden">
+          <div class="form-group">
+            <label for="reg-name" class="field-label">Nama Anda <span class="text-danger">*</span></label>
+            <input type="text" id="reg-name" class="form-input" placeholder="Misal: Asep" required>
+          </div>
+          <div class="form-group">
+            <label for="reg-username" class="field-label">Username Unik <span class="text-danger">*</span></label>
+            <input type="text" id="reg-username" class="form-input" placeholder="Huruf/angka tanpa spasi, misal: asep99" autocomplete="username" required>
+            <span class="field-hint">Digunakan saat masuk ke akun.</span>
+          </div>
+          <div class="form-group">
+            <label for="reg-password" class="field-label">PIN / Kata Sandi <span class="text-danger">*</span></label>
+            <input type="password" id="reg-password" class="form-input" placeholder="Minimal 4 digit/karakter" autocomplete="new-password" required>
+          </div>
+          <div class="form-group">
+            <label class="field-label">Hak Akses / Tipe Akun</label>
+            <div class="auth-role-selector">
+              <label class="auth-role-option selected" id="role-opt-pribadi">
+                <input type="radio" name="reg-role" value="pribadi" checked class="hidden">
+                <div class="role-option-title">Pengguna Pribadi</div>
+                <div class="role-option-desc">Hanya menampilkan koleksi & rak saya sendiri</div>
+              </label>
+              <label class="auth-role-option" id="role-opt-admin">
+                <input type="radio" name="reg-role" value="admin" class="hidden">
+                <div class="role-option-title">Admin / Bersama</div>
+                <div class="role-option-desc">Dapat melihat & mengelola koleksi semua anggota</div>
+              </label>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary mt-2" id="btn-submit-register" style="width: 100%;">
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Buat Akun & Mulai
+          </button>
+          <p class="auth-switch-prompt">
+            Sudah punya akun? <a href="#" id="link-switch-to-login">Masuk di sini &rarr;</a>
+          </p>
+        </form>
       </div>
     </div>
   </div>

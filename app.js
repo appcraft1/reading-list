@@ -18,8 +18,15 @@
   // Default Google Sheets URL (Bisa diisi agar APK langsung terhubung otomatis sejak pertama install)
   const DEFAULT_GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzUnEBcIEdLGzFu-bBAvK61jK3X3AnTx8Sl8dh-F-SnpqyhM90rJV0mKMspf6X1vLsO/exec';
 
-  const storedUserId = localStorage.getItem('reading_list_user_id') || ('user_' + Math.random().toString(36).substring(2, 7));
+  const savedAuthUser = JSON.parse(localStorage.getItem('reading_list_auth_user') || 'null');
+  const storedUserId = savedAuthUser?.userId || localStorage.getItem('reading_list_user_id') || ('user_' + Math.random().toString(36).substring(2, 7));
+  const storedUserName = savedAuthUser?.name || localStorage.getItem('reading_list_user_name') || 'Pengguna';
+  const storedUserRole = savedAuthUser?.role || localStorage.getItem('reading_list_user_role') || 'pribadi';
+  const storedUsername = savedAuthUser?.username || ('usr_' + storedUserId.substring(0, 8));
+
   localStorage.setItem('reading_list_user_id', storedUserId);
+  localStorage.setItem('reading_list_user_name', storedUserName);
+  localStorage.setItem('reading_list_user_role', storedUserRole);
 
   const initialSheetsUrl = localStorage.getItem('google_sheets_url') || DEFAULT_GOOGLE_SHEETS_URL || '';
   if (!localStorage.getItem('google_sheets_url') && DEFAULT_GOOGLE_SHEETS_URL) {
@@ -31,8 +38,9 @@
     items: [],
     profile: {
       userId: storedUserId,
-      userName: localStorage.getItem('reading_list_user_name') || 'Pengguna',
-      role: localStorage.getItem('reading_list_user_role') || 'pribadi' // 'pribadi' | 'admin'
+      userName: storedUserName,
+      role: storedUserRole,
+      username: storedUsername
     },
     settings: {
       geminiApiKey: localStorage.getItem('gemini_api_key') || '',
@@ -51,39 +59,58 @@
     isScannerMinimized: false
   };
 
-  // Bespoke Folder Icons & Palette Map
-  const FOLDER_THEMES = {
-    all: {
-      bg: '#f1f5f9',
-      color: '#334155',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>'
-    },
-    flame: {
-      bg: '#fff1f2',
-      color: '#f43f5e',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>'
-    },
-    book: {
-      bg: '#eef2ff',
-      color: '#4f46e5',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>'
-    },
-    film: {
-      bg: '#faf5ff',
-      color: '#9333ea',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><line x1="7" x2="7" y1="2" y2="22"/><line x1="17" x2="17" y1="2" y2="22"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="2" x2="7" y1="7" y2="7"/><line x1="2" x2="7" y1="17" y2="17"/><line x1="17" x2="22" y1="17" y2="17"/><line x1="17" x2="22" y1="7" y2="7"/></svg>'
-    },
-    leaf: {
-      bg: '#ecfdf5',
-      color: '#059669',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>'
-    },
-    star: {
-      bg: '#fffbeb',
-      color: '#d97706',
-      svg: '<svg class="svg-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
-    }
+  // 12 Luxury Colors Palette
+  const FOLDER_COLORS = {
+    flame:   { bg: '#fff1f2', color: '#f43f5e', name: 'Rose Flame' },
+    book:    { bg: '#eef2ff', color: '#4f46e5', name: 'Royal Indigo' },
+    film:    { bg: '#faf5ff', color: '#9333ea', name: 'Violet Amethyst' },
+    leaf:    { bg: '#ecfdf5', color: '#059669', name: 'Emerald Mint' },
+    star:    { bg: '#fffbeb', color: '#d97706', name: 'Amber Gold' },
+    cyan:    { bg: '#ecfeff', color: '#0891b2', name: 'Ocean Cyan' },
+    sunset:  { bg: '#fff7ed', color: '#ea580c', name: 'Sunset Coral' },
+    teal:    { bg: '#f0fdfa', color: '#0d9488', name: 'Teal Forest' },
+    pink:    { bg: '#fdf2f8', color: '#db2777', name: 'Magenta Pink' },
+    purple:  { bg: '#f5f3ff', color: '#7c3aed', name: 'Electric Purple' },
+    crimson: { bg: '#fef2f2', color: '#dc2626', name: 'Crimson Ruby' },
+    slate:   { bg: '#f8fafc', color: '#334155', name: 'Dark Slate' }
   };
+
+  // 12 Premium Bespoke SVG Icons
+  const FOLDER_ICONS = {
+    flame:    '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>',
+    book:     '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>',
+    film:     '<svg class="svg-icon" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><line x1="7" x2="7" y1="2" y2="22"/><line x1="17" x2="17" y1="2" y2="22"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="2" x2="7" y1="7" y2="7"/><line x1="2" x2="7" y1="17" y2="17"/><line x1="17" x2="22" y1="17" y2="17"/><line x1="17" x2="22" y1="7" y2="7"/></svg>',
+    leaf:     '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>',
+    star:     '<svg class="svg-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    bookmark: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>',
+    heart:    '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
+    sparkles: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>',
+    compass:  '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+    trophy:   '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v3h10v-3c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+    food:     '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2a5 5 0 0 0-5 5v1h10V7a5 5 0 0 0-5-5Z"/><path d="M3 11h18a9 9 0 0 1-18 0Z"/><line x1="12" y1="20" x2="12" y2="22"/></svg>',
+    diamond:  '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 12L2 9Z"/><path d="M11 3 8 9l4 12 4-12-3-6"/><path d="M2 9h20"/></svg>'
+  };
+
+  const FOLDER_THEMES = FOLDER_COLORS; // Backwards compatibility
+
+  function getFolderVisual(folder) {
+    if (!folder || folder.id === 'all') {
+      return {
+        bg: '#f1f5f9',
+        color: '#334155',
+        svg: '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M14 14h7v7h-7z"/><path d="M3 14h7v7H3z"/></svg>'
+      };
+    }
+    const colorKey = folder.color || 'book';
+    const iconKey = folder.icon || colorKey || 'book';
+    const colorDef = FOLDER_COLORS[colorKey] || FOLDER_COLORS.book;
+    const iconSvg = FOLDER_ICONS[iconKey] || FOLDER_ICONS[colorKey] || FOLDER_ICONS.book;
+    return {
+      bg: colorDef.bg,
+      color: colorDef.color,
+      svg: iconSvg
+    };
+  }
 
   // DOM Elements
   const dom = {
@@ -365,6 +392,219 @@
   }
 
   // =========================================================================
+  // 3.5 CUSTOM APK DROPDOWN SYSTEM (NO BROWSER NATIVE SELECT POPUP)
+  // =========================================================================
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-apk-dropdown')) {
+      closeAllApkDropdowns();
+    }
+  });
+
+  function closeAllApkDropdowns() {
+    document.querySelectorAll('.apk-dropdown-menu:not(.hidden)').forEach(menu => {
+      menu.classList.add('hidden');
+    });
+  }
+
+  function setupApkDropdown(config) {
+    const {
+      triggerBtn,
+      menuEl,
+      displayLabelEl,
+      selectEl = null,
+      items = null,
+      initialValue = null,
+      onChange = null
+    } = config;
+
+    if (!triggerBtn || !menuEl) return;
+
+    // Jika items disediakan secara dinamis, render ulang isi menuEl
+    if (Array.isArray(items)) {
+      menuEl.innerHTML = '';
+      items.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'apk-dropdown-item';
+        itemEl.setAttribute('data-value', item.value);
+
+        let dotHtml = '';
+        if (item.dotColor) {
+          dotHtml = `<span class="apk-dropdown-dot" style="background:${item.dotColor};"></span>`;
+        } else if (item.statusDot) {
+          dotHtml = `<span class="status-indicator-dot dot-${item.statusDot}"></span>`;
+        }
+
+        itemEl.innerHTML = `
+          ${dotHtml}
+          <span class="apk-dropdown-item-text">${escapeHTML(item.label)}</span>
+          <svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        `;
+        menuEl.appendChild(itemEl);
+      });
+    }
+
+    // Set initial active state and label
+    const targetVal = initialValue !== null ? initialValue : (selectEl ? selectEl.value : null);
+    if (targetVal !== null) {
+      applyActiveDropdownValue(menuEl, displayLabelEl, selectEl, targetVal);
+    }
+
+    // Toggle menu dropdown saat trigger di-klik
+    triggerBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isAlreadyOpen = !menuEl.classList.contains('hidden');
+      closeAllApkDropdowns();
+
+      if (!isAlreadyOpen) {
+        menuEl.classList.remove('hidden');
+
+        // Cek jika dropdown perlu muncul ke atas (dropup) jika mepet bawah layar
+        const triggerRect = triggerBtn.getBoundingClientRect();
+        if (triggerRect.bottom + 220 > window.innerHeight && triggerRect.top > 220) {
+          menuEl.classList.add('dropup');
+        } else {
+          menuEl.classList.remove('dropup');
+        }
+      }
+    };
+
+    // Event delegation untuk item click di dalam menuEl
+    menuEl.onclick = (e) => {
+      const itemEl = e.target.closest('.apk-dropdown-item');
+      if (!itemEl) return;
+      e.stopPropagation();
+
+      const val = itemEl.getAttribute('data-value');
+      const textEl = itemEl.querySelector('.apk-dropdown-item-text');
+      const label = textEl ? textEl.textContent.trim() : val;
+
+      applyActiveDropdownValue(menuEl, displayLabelEl, selectEl, val);
+      closeAllApkDropdowns();
+
+      if (selectEl) {
+        selectEl.value = val;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      if (typeof onChange === 'function') {
+        onChange(val, label);
+      }
+    };
+  }
+
+  function applyActiveDropdownValue(menuEl, displayLabelEl, selectEl, val) {
+    if (!menuEl) return;
+    let foundLabel = null;
+    let foundDotColor = null;
+    let foundStatusDot = null;
+
+    menuEl.querySelectorAll('.apk-dropdown-item').forEach(itemEl => {
+      const itemVal = itemEl.getAttribute('data-value');
+      const isMatch = String(itemVal) === String(val);
+      itemEl.classList.toggle('active', isMatch);
+      if (isMatch) {
+        const textEl = itemEl.querySelector('.apk-dropdown-item-text');
+        foundLabel = textEl ? textEl.textContent.trim() : itemVal;
+        const dot = itemEl.querySelector('.apk-dropdown-dot');
+        if (dot) foundDotColor = dot.style.background;
+        const sDot = itemEl.querySelector('.status-indicator-dot');
+        if (sDot) {
+          if (sDot.classList.contains('dot-plan')) foundStatusDot = 'plan';
+          else if (sDot.classList.contains('dot-reading')) foundStatusDot = 'reading';
+          else if (sDot.classList.contains('dot-completed')) foundStatusDot = 'completed';
+        }
+      }
+    });
+
+    if (displayLabelEl && foundLabel) {
+      const textSpan = displayLabelEl.querySelector('.apk-dropdown-text');
+      if (textSpan) {
+        textSpan.textContent = foundLabel;
+      } else {
+        displayLabelEl.textContent = foundLabel;
+      }
+
+      const dotSpan = displayLabelEl.querySelector('.apk-dropdown-dot');
+      if (dotSpan && foundDotColor) {
+        dotSpan.style.background = foundDotColor;
+      }
+
+      const statusSpan = displayLabelEl.querySelector('.status-indicator-dot');
+      if (statusSpan && foundStatusDot) {
+        statusSpan.className = `status-indicator-dot dot-${foundStatusDot}`;
+      }
+    }
+
+    if (selectEl && val !== null) {
+      selectEl.value = val;
+    }
+  }
+
+  function populateFolderSelects() {
+    const accessibleFolders = appState.folders;
+    const folderItems = accessibleFolders.map(f => {
+      const vis = getFolderVisual(f);
+      return { value: f.id, label: f.name, dotColor: vis.color };
+    });
+
+    // 1. results-target-folder (Scanner results toolbar)
+    const resSel = document.getElementById('results-target-folder');
+    const resMenu = document.getElementById('menu-dropdown-results-folder');
+    const resLabel = document.getElementById('results-folder-display-label');
+    const resTrigger = document.getElementById('btn-trigger-results-folder');
+
+    if (resSel && resMenu && resTrigger) {
+      resSel.innerHTML = '';
+      accessibleFolders.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.name;
+        resSel.appendChild(opt);
+      });
+      const curResVal = resSel.value || accessibleFolders[0]?.id || '';
+      resSel.value = curResVal;
+      setupApkDropdown({
+        triggerBtn: resTrigger,
+        menuEl: resMenu,
+        displayLabelEl: resLabel,
+        selectEl: resSel,
+        items: folderItems,
+        initialValue: curResVal,
+        onChange: (val) => { resSel.value = val; }
+      });
+    }
+
+    // 2. item-folder-select (Item detail modal)
+    const itemSel = document.getElementById('item-folder-select');
+    const itemMenu = document.getElementById('menu-dropdown-item-folder');
+    const itemLabel = document.getElementById('item-folder-display-label');
+    const itemTrigger = document.getElementById('btn-trigger-item-folder');
+
+    if (itemSel && itemMenu && itemTrigger) {
+      itemSel.innerHTML = '';
+      accessibleFolders.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.name;
+        itemSel.appendChild(opt);
+      });
+      const curItemVal = itemSel.value || (appState.activeFolderId !== 'all' ? appState.activeFolderId : accessibleFolders[0]?.id) || '';
+      itemSel.value = curItemVal;
+      setupApkDropdown({
+        triggerBtn: itemTrigger,
+        menuEl: itemMenu,
+        displayLabelEl: itemLabel,
+        selectEl: itemSel,
+        items: folderItems,
+        initialValue: curItemVal,
+        onChange: (val) => { itemSel.value = val; }
+      });
+    }
+  }
+
+  // =========================================================================
   // 4. RENDERING & UI CONTROLLER
   // =========================================================================
   function renderAll() {
@@ -483,14 +723,14 @@
 
     // 2. Folder-Folder Dinamis
     appState.folders.forEach(folder => {
-      const theme = FOLDER_THEMES[folder.color] || FOLDER_THEMES.book;
+      const visual = getFolderVisual(folder);
       const count = accessible.filter(i => i.folderId === folder.id).length;
 
       const card = document.createElement('div');
       card.className = `visual-folder-card ${appState.activeFolderId === folder.id && !appState.statusFilter ? 'active' : ''}`;
       card.innerHTML = `
-        <div class="folder-icon-circle" style="background: ${theme.bg}; color: ${theme.color};">
-          ${theme.svg}
+        <div class="folder-icon-circle" style="background: ${visual.bg}; color: ${visual.color};">
+          ${visual.svg}
         </div>
         <div>
           <span class="folder-name-text">${escapeHTML(folder.name)}</span>
@@ -725,7 +965,136 @@
     renderAll();
   }
 
+  // =========================================================================
+  // CUSTOM APK DROPDOWN CONTROLLER (100% BEBAS POPUP SELECT BROWSER)
+  // =========================================================================
+  let activeOpenDropdownMenu = null;
+
+  document.addEventListener('click', (e) => {
+    if (activeOpenDropdownMenu && !e.target.closest('.custom-apk-dropdown')) {
+      activeOpenDropdownMenu.classList.add('hidden');
+      const trigger = activeOpenDropdownMenu.closest('.custom-apk-dropdown')?.querySelector('.apk-dropdown-trigger');
+      if (trigger) trigger.classList.remove('open');
+      activeOpenDropdownMenu = null;
+    }
+  });
+
+  function toggleCustomDropdownMenu(triggerBtn, menuEl) {
+    if (!menuEl || !triggerBtn) return;
+    const isOpening = menuEl.classList.contains('hidden');
+
+    // Tutup dropdown lain yang sedang terbuka
+    if (activeOpenDropdownMenu && activeOpenDropdownMenu !== menuEl) {
+      activeOpenDropdownMenu.classList.add('hidden');
+      const otherTrigger = activeOpenDropdownMenu.closest('.custom-apk-dropdown')?.querySelector('.apk-dropdown-trigger');
+      if (otherTrigger) otherTrigger.classList.remove('open');
+      activeOpenDropdownMenu = null;
+    }
+
+    if (isOpening) {
+      const rect = triggerBtn.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < 220 && rect.top > 220) {
+        menuEl.classList.add('dropup');
+      } else {
+        menuEl.classList.remove('dropup');
+      }
+      menuEl.classList.remove('hidden');
+      triggerBtn.classList.add('open');
+      activeOpenDropdownMenu = menuEl;
+    } else {
+      menuEl.classList.add('hidden');
+      triggerBtn.classList.remove('open');
+      activeOpenDropdownMenu = null;
+    }
+  }
+
+  function setupApkDropdown({
+    triggerBtn,
+    menuEl,
+    hiddenSelect,
+    displayLabelEl,
+    items, // [{ value, label, dotColor, iconSvg }]
+    initialValue,
+    onChange
+  }) {
+    if (!triggerBtn || !menuEl) return;
+
+    function renderMenu() {
+      menuEl.innerHTML = '';
+      const curVal = hiddenSelect ? hiddenSelect.value : (initialValue || (items[0] ? items[0].value : ''));
+
+      items.forEach(it => {
+        const itemEl = document.createElement('div');
+        const isActive = String(it.value) === String(curVal);
+        itemEl.className = `apk-dropdown-item ${isActive ? 'active' : ''}`;
+        itemEl.setAttribute('data-value', it.value);
+
+        let leftContent = '';
+        if (it.dotColor) {
+          leftContent += `<span class="apk-dropdown-dot" style="background:${it.dotColor};"></span>`;
+        }
+        if (it.iconSvg) {
+          leftContent += `<span class="apk-dropdown-dot" style="display:inline-flex;align-items:center;">${it.iconSvg}</span>`;
+        }
+        leftContent += `<span class="apk-dropdown-item-text">${escapeHTML(it.label)}</span>`;
+
+        itemEl.innerHTML = `
+          <div class="apk-dropdown-item-left">${leftContent}</div>
+          ${isActive ? '<svg class="apk-dropdown-check svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+        `;
+
+        itemEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (hiddenSelect) {
+            hiddenSelect.value = it.value;
+            hiddenSelect.dispatchEvent(new Event('change'));
+          }
+          if (displayLabelEl) {
+            if (it.dotColor) {
+              displayLabelEl.innerHTML = `<span class="apk-dropdown-dot" style="background:${it.dotColor};"></span> <span>${escapeHTML(it.label)}</span>`;
+            } else {
+              displayLabelEl.textContent = it.label;
+            }
+          }
+          toggleCustomDropdownMenu(triggerBtn, menuEl);
+          renderMenu();
+          if (onChange) onChange(it.value);
+        });
+
+        menuEl.appendChild(itemEl);
+      });
+
+      // Update label trigger
+      const activeItem = items.find(i => String(i.value) === String(curVal)) || items[0];
+      if (activeItem && displayLabelEl) {
+        if (activeItem.dotColor) {
+          displayLabelEl.innerHTML = `<span class="apk-dropdown-dot" style="background:${activeItem.dotColor};"></span> <span>${escapeHTML(activeItem.label)}</span>`;
+        } else {
+          displayLabelEl.textContent = activeItem.label;
+        }
+      }
+    }
+
+    renderMenu();
+
+    triggerBtn.onclick = (e) => {
+      e.stopPropagation();
+      renderMenu();
+      toggleCustomDropdownMenu(triggerBtn, menuEl);
+    };
+  }
+
   function populateFolderSelects() {
+    const folderItems = appState.folders.map(f => {
+      const visual = getFolderVisual(f);
+      return {
+        value: f.id,
+        label: f.name,
+        dotColor: visual.color
+      };
+    });
+
     const selects = [
       dom.resultsTargetFolder,
       document.getElementById('item-folder-select')
@@ -745,6 +1114,37 @@
         select.value = currentVal;
       }
     });
+
+    // Custom APK Dropdown untuk Target Folder Hasil Scan
+    const triggerRes = document.getElementById('btn-trigger-results-folder');
+    const menuRes = document.getElementById('menu-dropdown-results-folder');
+    const labelRes = document.getElementById('results-folder-display-label');
+    if (triggerRes && menuRes && dom.resultsTargetFolder) {
+      setupApkDropdown({
+        triggerBtn: triggerRes,
+        menuEl: menuRes,
+        hiddenSelect: dom.resultsTargetFolder,
+        displayLabelEl: labelRes,
+        items: folderItems,
+        initialValue: dom.resultsTargetFolder.value || (appState.folders[0]?.id || '')
+      });
+    }
+
+    // Custom APK Dropdown untuk Folder Item Detail
+    const triggerItemF = document.getElementById('btn-trigger-item-folder');
+    const menuItemF = document.getElementById('menu-dropdown-item-folder');
+    const labelItemF = document.getElementById('item-folder-display-label');
+    const selItemF = document.getElementById('item-folder-select');
+    if (triggerItemF && menuItemF && selItemF) {
+      setupApkDropdown({
+        triggerBtn: triggerItemF,
+        menuEl: menuItemF,
+        hiddenSelect: selItemF,
+        displayLabelEl: labelItemF,
+        items: folderItems,
+        initialValue: selItemF.value || (appState.folders[0]?.id || '')
+      });
+    }
   }
 
   // =========================================================================
@@ -922,10 +1322,24 @@
         pendingJob.status = 'processing';
         saveScanJobToDB(pendingJob);
 
-        // Update UI
+        // Update UI (Format judul bersih tanpa membungkus nama file panjang WhatsApp)
         if (dom.scanPreviewImg) dom.scanPreviewImg.src = pendingJob.dataUrl;
-        if (dom.scanProcessingTitle) dom.scanProcessingTitle.textContent = `Gemini 3.8 Membaca ${escapeHTML(pendingJob.name)}...`;
-        if (dom.scanStatusTicker) dom.scanStatusTicker.textContent = `Memindai foto ${completedJobs + 1} dari ${totalJobs}... Mengekstrak judul & auto-crop sampul`;
+
+        let displayJobName = `Foto ${completedJobs + 1} dari ${totalJobs}`;
+        if (pendingJob.name) {
+          if (pendingJob.name.toLowerCase().includes('whatsapp')) {
+            displayJobName = `Screenshot #${completedJobs + 1}`;
+          } else {
+            const clean = pendingJob.name.replace(/\.[^/.]+$/, '');
+            displayJobName = clean.length > 20 ? clean.substring(0, 18) + '...' : clean;
+          }
+        }
+        if (dom.scanProcessingTitle) dom.scanProcessingTitle.textContent = `Memindai ${displayJobName}`;
+        if (dom.scanStatusTicker) {
+          dom.scanStatusTicker.textContent = totalJobs > 1 
+            ? `Foto ${completedJobs + 1} dari ${totalJobs} • Mengekstrak judul & auto-crop` 
+            : 'Mengekstrak judul & auto-crop sampul via Gemini 3.8';
+        }
 
         const percent = Math.round(((completedJobs) / totalJobs) * 100);
         if (dom.queueProgressBar) dom.queueProgressBar.style.width = `${percent}%`;
@@ -1087,12 +1501,17 @@
     resCard.setAttribute('data-temp-id', itemObj.tempId);
 
     const defaultFolderId = itemObj.folderId || dom.resultsTargetFolder.value || (appState.folders[0]?.id || 'f-manhwa');
+    itemObj.folderId = defaultFolderId;
 
-    let folderOptions = '';
-    appState.folders.forEach(f => {
-      const isSel = (f.id === defaultFolderId) ? 'selected' : '';
-      folderOptions += `<option value="${f.id}" ${isSel}>${escapeHTML(f.name)}</option>`;
-    });
+    const currentF = appState.folders.find(f => f.id === defaultFolderId) || appState.folders[0];
+    const visual = getFolderVisual(currentF);
+
+    const statusMap = {
+      plan: { label: 'Ingin Dibaca', color: '#f59e0b', dotClass: 'dot-plan' },
+      reading: { label: 'Sedang Dibaca', color: '#4f46e5', dotClass: 'dot-reading' },
+      completed: { label: 'Selesai', color: '#10b981', dotClass: 'dot-completed' }
+    };
+    const curStatus = statusMap[itemObj.status] || statusMap.plan;
 
     const hasCover = !!(itemObj.coverUrl && itemObj.coverUrl.trim());
 
@@ -1123,14 +1542,29 @@
         <textarea class="input-result-desc" rows="2" placeholder="Sinopsis singkat / catatan...">${escapeHTML(itemObj.desc)}</textarea>
         <div class="result-row-extras">
           <div class="result-selectors">
-            <select class="input-result-folder" title="Pilih folder">
-              ${folderOptions}
-            </select>
-            <select class="input-result-status" title="Pilih status">
-              <option value="plan" ${itemObj.status === 'plan' ? 'selected' : ''}>Ingin Dibaca</option>
-              <option value="reading" ${itemObj.status === 'reading' ? 'selected' : ''}>Sedang Dibaca</option>
-              <option value="completed" ${itemObj.status === 'completed' ? 'selected' : ''}>Selesai</option>
-            </select>
+            <!-- Custom APK Dropdown for Folder -->
+            <div class="custom-apk-dropdown inline card-folder-dd">
+              <button type="button" class="apk-dropdown-trigger sm card-folder-trigger">
+                <span class="apk-dropdown-label card-folder-label">
+                  <span class="apk-dropdown-dot" style="background:${visual.color};"></span>
+                  <span class="apk-dropdown-text">${escapeHTML(currentF ? currentF.name : 'Folder')}</span>
+                </span>
+                <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="apk-dropdown-menu hidden card-folder-menu"></div>
+            </div>
+
+            <!-- Custom APK Dropdown for Status -->
+            <div class="custom-apk-dropdown inline card-status-dd">
+              <button type="button" class="apk-dropdown-trigger sm card-status-trigger">
+                <span class="apk-dropdown-label card-status-label">
+                  <span class="status-indicator-dot ${curStatus.dotClass}"></span>
+                  <span class="apk-dropdown-text">${curStatus.label}</span>
+                </span>
+                <svg class="svg-icon icon-xs apk-dropdown-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="apk-dropdown-menu hidden card-status-menu"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -1139,12 +1573,44 @@
     const chk = resCard.querySelector('.result-checkbox');
     const titleInput = resCard.querySelector('.input-result-title');
     const descInput = resCard.querySelector('.input-result-desc');
-    const folderSelect = resCard.querySelector('.input-result-folder');
-    const statusSelect = resCard.querySelector('.input-result-status');
     const btnRemove = resCard.querySelector('.btn-remove-scan-item');
     const thumbWrap = resCard.querySelector('.result-cover-thumb');
     const thumbImg = resCard.querySelector('.result-thumb-img');
     const thumbInput = resCard.querySelector('.result-cover-input');
+
+    // Setup Custom Dropdown untuk Folder
+    const triggerCardF = resCard.querySelector('.card-folder-trigger');
+    const menuCardF = resCard.querySelector('.card-folder-menu');
+    const labelCardF = resCard.querySelector('.card-folder-label');
+    const folderItems = appState.folders.map(f => {
+      const vis = getFolderVisual(f);
+      return { value: f.id, label: f.name, dotColor: vis.color };
+    });
+    setupApkDropdown({
+      triggerBtn: triggerCardF,
+      menuEl: menuCardF,
+      displayLabelEl: labelCardF,
+      items: folderItems,
+      initialValue: itemObj.folderId,
+      onChange: (val) => { itemObj.folderId = val; }
+    });
+
+    // Setup Custom Dropdown untuk Status
+    const triggerCardS = resCard.querySelector('.card-status-trigger');
+    const menuCardS = resCard.querySelector('.card-status-menu');
+    const labelCardS = resCard.querySelector('.card-status-label');
+    setupApkDropdown({
+      triggerBtn: triggerCardS,
+      menuEl: menuCardS,
+      displayLabelEl: labelCardS,
+      items: [
+        { value: 'plan', label: 'Ingin Dibaca', dotColor: '#f59e0b' },
+        { value: 'reading', label: 'Sedang Dibaca', dotColor: '#4f46e5' },
+        { value: 'completed', label: 'Selesai', dotColor: '#10b981' }
+      ],
+      initialValue: itemObj.status,
+      onChange: (val) => { itemObj.status = val; }
+    });
 
     // 1. Checkbox toggle
     chk.addEventListener('change', () => {
@@ -1155,8 +1621,6 @@
     // 2. Edit Text
     titleInput.addEventListener('input', () => { itemObj.title = titleInput.value; });
     descInput.addEventListener('input', () => { itemObj.desc = descInput.value; });
-    folderSelect.addEventListener('change', () => { itemObj.folderId = folderSelect.value; });
-    statusSelect.addEventListener('change', () => { itemObj.status = statusSelect.value; });
 
     // 3. Edit Cover Photo (Ganti Foto / Pilih Foto Lain)
     thumbWrap.addEventListener('click', (e) => {
@@ -1508,8 +1972,30 @@ Format WAJIB: JSON array murni tanpa format markdown:
     document.getElementById('item-modal-title').textContent = isEdit ? 'Detail Bacaan' : 'Tambah Bacaan';
     document.getElementById('item-id-hidden').value = isEdit ? item.id : '';
     document.getElementById('item-title-input').value = isEdit ? item.title : '';
-    document.getElementById('item-folder-select').value = isEdit ? item.folderId : (appState.activeFolderId !== 'all' ? appState.activeFolderId : appState.folders[0]?.id);
-    document.getElementById('item-status-select').value = isEdit ? (item.status || 'plan') : 'plan';
+
+    // Sinkronkan custom APK dropdown folder
+    populateFolderSelects();
+    const selFolderId = isEdit ? item.folderId : (appState.activeFolderId !== 'all' ? appState.activeFolderId : (appState.folders[0]?.id || ''));
+    const fSel = document.getElementById('item-folder-select');
+    if (fSel) fSel.value = selFolderId;
+    applyActiveDropdownValue(
+      document.getElementById('menu-dropdown-item-folder'),
+      document.getElementById('item-folder-display-label'),
+      fSel,
+      selFolderId
+    );
+
+    // Sinkronkan custom APK dropdown status
+    const selStatus = isEdit ? (item.status || 'plan') : 'plan';
+    const sSel = document.getElementById('item-status-select');
+    if (sSel) sSel.value = selStatus;
+    applyActiveDropdownValue(
+      document.getElementById('menu-dropdown-item-status'),
+      document.getElementById('item-status-display-label'),
+      sSel,
+      selStatus
+    );
+
     document.getElementById('item-desc-input').value = isEdit ? (item.desc || '') : '';
 
     const btnDelete = document.getElementById('btn-delete-item');
@@ -1539,6 +2025,24 @@ Format WAJIB: JSON array murni tanpa format markdown:
   }
 
   function initItemFormEvents() {
+    // Inisialisasi Custom APK Dropdown Status Item
+    setupApkDropdown({
+      triggerBtn: document.getElementById('btn-trigger-item-status'),
+      menuEl: document.getElementById('menu-dropdown-item-status'),
+      displayLabelEl: document.getElementById('item-status-display-label'),
+      selectEl: document.getElementById('item-status-select'),
+      items: [
+        { value: 'plan', label: 'Ingin Dibaca', statusDot: 'plan' },
+        { value: 'reading', label: 'Sedang Dibaca', statusDot: 'reading' },
+        { value: 'completed', label: 'Selesai', statusDot: 'completed' }
+      ],
+      initialValue: 'plan',
+      onChange: (val) => {
+        const s = document.getElementById('item-status-select');
+        if (s) s.value = val;
+      }
+    });
+
     document.getElementById('btn-change-cover').addEventListener('click', () => {
       dom.coverFileInput.click();
     });
@@ -1632,14 +2136,73 @@ Format WAJIB: JSON array murni tanpa format markdown:
   }
 
   // =========================================================================
-  // 7. FOLDER MANAGEMENT
+  // 7. FOLDER MANAGEMENT (12 WARNA & 12 IKON BESPOKE SVG + LIVE PREVIEW)
   // =========================================================================
+  function updateFolderModalPreview() {
+    const nameInput = document.getElementById('folder-name-input');
+    const iconInput = document.getElementById('folder-icon-input');
+    const colorInput = document.getElementById('folder-color-input');
+
+    const previewName = document.getElementById('preview-folder-name');
+    const previewBox = document.getElementById('preview-folder-icon-box');
+
+    const curName = nameInput ? nameInput.value.trim() : '';
+    const curIcon = iconInput ? iconInput.value : 'flame';
+    const curColor = colorInput ? colorInput.value : 'flame';
+
+    if (previewName) {
+      previewName.textContent = curName || 'Nama Folder';
+    }
+
+    const colorDef = FOLDER_COLORS[curColor] || FOLDER_COLORS.flame;
+    const iconSvg = FOLDER_ICONS[curIcon] || FOLDER_ICONS.flame;
+
+    if (previewBox) {
+      previewBox.style.background = colorDef.bg;
+      previewBox.style.color = colorDef.color;
+      previewBox.innerHTML = iconSvg;
+    }
+  }
+
+  function setActiveFolderIcon(iconKey) {
+    const iconInput = document.getElementById('folder-icon-input');
+    if (iconInput) iconInput.value = iconKey;
+
+    const iconBtns = document.querySelectorAll('#folder-icon-picker .folder-icon-btn');
+    iconBtns.forEach(b => {
+      const isMatch = b.getAttribute('data-icon') === iconKey;
+      b.classList.toggle('active', isMatch);
+      if (isMatch) {
+        const lbl = document.getElementById('label-active-icon');
+        if (lbl) lbl.textContent = b.getAttribute('title') || iconKey;
+      }
+    });
+    updateFolderModalPreview();
+  }
+
+  function setActiveFolderColorDot(colorKey) {
+    const colorInput = document.getElementById('folder-color-input');
+    if (colorInput) colorInput.value = colorKey;
+
+    const dots = document.querySelectorAll('#folder-color-picker .color-dot');
+    dots.forEach(d => {
+      const isMatch = d.getAttribute('data-color') === colorKey;
+      d.classList.toggle('active', isMatch);
+      if (isMatch) {
+        const lbl = document.getElementById('label-active-color');
+        if (lbl) lbl.textContent = d.getAttribute('title') || colorKey;
+      }
+    });
+    updateFolderModalPreview();
+  }
+
   function openNewFolderModal() {
     dom.modalFolder.classList.remove('hidden');
     document.getElementById('folder-modal-title').textContent = 'Folder Baru';
     document.getElementById('folder-id-hidden').value = '';
     document.getElementById('folder-name-input').value = '';
     document.getElementById('btn-delete-folder').classList.add('hidden');
+    setActiveFolderIcon('flame');
     setActiveFolderColorDot('flame');
   }
 
@@ -1649,6 +2212,7 @@ Format WAJIB: JSON array murni tanpa format markdown:
     document.getElementById('folder-id-hidden').value = folder.id;
     document.getElementById('folder-name-input').value = folder.name;
     document.getElementById('btn-delete-folder').classList.remove('hidden');
+    setActiveFolderIcon(folder.icon || folder.color || 'flame');
     setActiveFolderColorDot(folder.color || 'flame');
   }
 
@@ -1657,26 +2221,40 @@ Format WAJIB: JSON array murni tanpa format markdown:
     dom.formFolder.reset();
   }
 
-  function setActiveFolderColorDot(colorKey) {
-    const dots = document.querySelectorAll('#folder-color-picker .color-dot');
-    dots.forEach(d => {
-      d.classList.toggle('active', d.getAttribute('data-color') === colorKey);
-    });
-  }
-
   function initFolderEvents() {
-    const picker = document.getElementById('folder-color-picker');
-    picker.addEventListener('click', (e) => {
-      const dot = e.target.closest('.color-dot');
-      if (dot) setActiveFolderColorDot(dot.getAttribute('data-color'));
-    });
+    const iconPicker = document.getElementById('folder-icon-picker');
+    if (iconPicker) {
+      iconPicker.addEventListener('click', (e) => {
+        const btn = e.target.closest('.folder-icon-btn');
+        if (btn) {
+          const key = btn.getAttribute('data-icon');
+          if (key) setActiveFolderIcon(key);
+        }
+      });
+    }
+
+    const colorPicker = document.getElementById('folder-color-picker');
+    if (colorPicker) {
+      colorPicker.addEventListener('click', (e) => {
+        const dot = e.target.closest('.color-dot');
+        if (dot) {
+          const key = dot.getAttribute('data-color');
+          if (key) setActiveFolderColorDot(key);
+        }
+      });
+    }
+
+    const nameInput = document.getElementById('folder-name-input');
+    if (nameInput) {
+      nameInput.addEventListener('input', updateFolderModalPreview);
+    }
 
     dom.formFolder.addEventListener('submit', (e) => {
       e.preventDefault();
       const id = document.getElementById('folder-id-hidden').value;
       const name = document.getElementById('folder-name-input').value.trim();
-      const activeDot = document.querySelector('#folder-color-picker .color-dot.active');
-      const color = activeDot ? activeDot.getAttribute('data-color') : 'flame';
+      const icon = document.getElementById('folder-icon-input').value || 'flame';
+      const color = document.getElementById('folder-color-input').value || 'flame';
 
       if (!name) {
         showToast('Nama folder tidak boleh kosong.');
@@ -1688,6 +2266,7 @@ Format WAJIB: JSON array murni tanpa format markdown:
         if (f) {
           f.name = name;
           f.color = color;
+          f.icon = icon;
           saveFolderToDB(f);
         }
       } else {
@@ -1695,6 +2274,7 @@ Format WAJIB: JSON array murni tanpa format markdown:
           id: 'f-' + Date.now(),
           name,
           color,
+          icon,
           createdAt: Date.now(),
           userId: appState.profile.userId
         };
@@ -1760,16 +2340,18 @@ Format WAJIB: JSON array murni tanpa format markdown:
 
 const SHEET_ITEMS = "Koleksi_Bacaan";
 const SHEET_FOLDERS = "Folder_Rak";
+const SHEET_USERS = "Pengguna_Akun";
 
 const ITEM_HEADERS = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada", "User_ID", "User_Name"];
-const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID"];
+const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID", "Icon_Key"];
+const USER_HEADERS = ["User_ID", "Username", "Nama", "Password_Hash", "Role", "Dibuat_Pada"];
 
 // Data Bawaan Sistem (Inisialisasi Otomatis Saat Spreadsheet Masih Kosong)
 const DUMMY_FOLDERS = [
-  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', userId: 'system' },
-  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', userId: 'system' },
-  { id: 'f-anime',  name: 'Anime & Film', color: 'film', userId: 'system' },
-  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', userId: 'system' }
+  { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', userId: 'system', icon: 'flame' },
+  { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', userId: 'system', icon: 'book' },
+  { id: 'f-anime',  name: 'Anime & Film', color: 'film', userId: 'system', icon: 'film' },
+  { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', userId: 'system', icon: 'leaf' }
 ];
 
 const DUMMY_ITEMS = [
@@ -1854,10 +2436,12 @@ function onOpen() {
 function setupDatabase() {
   const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
   const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
+  const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
 
-  // Upgrade header sheet lama jika belum memiliki kolom User_ID
+  // Upgrade header sheet lama jika belum memiliki kolom User_ID atau Icon_Key
   upgradeSheetHeaders(itemSheet, ITEM_HEADERS);
   upgradeSheetHeaders(folderSheet, FOLDER_HEADERS);
+  upgradeSheetHeaders(userSheet, USER_HEADERS);
 
   // Jika masih kosong (hanya ada baris header), isi data awal
   if (itemSheet.getLastRow() <= 1 && folderSheet.getLastRow() <= 1) {
@@ -1932,6 +2516,70 @@ function doPost(e) {
     const role = String(body.role || 'pribadi').trim();
 
     setupDatabase();
+
+    // =========================================================================
+    // AUTH: REGISTRASI & LOGIN AKUN PENGGUNA
+    // =========================================================================
+    if (action === 'auth_register') {
+      const username = String(body.username || '').trim().toLowerCase();
+      const password = String(body.password || '').trim();
+      const name = String(body.name || username).trim();
+      const userRole = String(body.role || 'pribadi').trim();
+
+      if (!username || !password) {
+        return createJsonResponse({ success: false, error: 'Username dan PIN / Password wajib diisi.' });
+      }
+
+      const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+      const userData = userSheet.getDataRange().getValues();
+
+      for (let i = 1; i < userData.length; i++) {
+        if (String(userData[i][1] || '').trim().toLowerCase() === username) {
+          return createJsonResponse({ success: false, error: 'Username sudah digunakan oleh akun lain. Silakan pakai username berbeda.' });
+        }
+      }
+
+      const newUserId = 'usr_' + username.replace(/[^a-z0-9]/g, '') + '_' + Math.random().toString(36).substring(2, 6);
+      userSheet.appendRow([newUserId, username, name, password, userRole, Date.now()]);
+
+      return createJsonResponse({
+        success: true,
+        message: 'Registrasi akun berhasil!',
+        user: { userId: newUserId, username: username, name: name, role: userRole }
+      });
+    }
+
+    if (action === 'auth_login') {
+      const username = String(body.username || '').trim().toLowerCase();
+      const password = String(body.password || '').trim();
+
+      const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+      const userData = userSheet.getDataRange().getValues();
+
+      for (let i = 1; i < userData.length; i++) {
+        const rowUsername = String(userData[i][1] || '').trim().toLowerCase();
+        const rowPassword = String(userData[i][3] || '').trim();
+        if (rowUsername === username) {
+          if (rowPassword === password) {
+            const foundUser = {
+              userId: String(userData[i][0] || '').trim(),
+              username: rowUsername,
+              name: String(userData[i][2] || rowUsername).trim(),
+              role: String(userData[i][4] || 'pribadi').trim()
+            };
+            return createJsonResponse({
+              success: true,
+              message: 'Login berhasil!',
+              user: foundUser
+            });
+          } else {
+            return createJsonResponse({ success: false, error: 'PIN / Password salah.' });
+          }
+        }
+      }
+
+      return createJsonResponse({ success: false, error: 'Akun dengan username tersebut belum terdaftar. Silakan pilih tab Daftar Akun.' });
+    }
 
     if (action === 'save_all') {
       const folders = body.folders || [];
@@ -2428,6 +3076,346 @@ function createJsonResponse(data) {
     }
   }
 
+  // =========================================================================
+  // 8.0 ACCOUNT & MULTI-USER AUTH SYSTEM (OFFLINE + GOOGLE APPS SCRIPT BACKEND)
+  // =========================================================================
+  function updateSettingsAccountCard() {
+    const nameEl = document.getElementById('settings-display-name') || document.getElementById('settings-account-name');
+    const userEl = document.getElementById('settings-display-username') || document.getElementById('settings-account-username');
+    const badgeEl = document.getElementById('settings-role-badge') || document.getElementById('settings-account-role-badge');
+    const initialEl = document.getElementById('settings-avatar-badge') || document.getElementById('settings-avatar-initial');
+
+    const curName = appState.profile.userName || 'Pengguna';
+    const curUsername = appState.profile.username || ('user_' + appState.profile.userId.substring(0, 6));
+    const curRole = appState.profile.role || 'pribadi';
+    const isAdmin = curRole === 'admin';
+
+    if (nameEl) nameEl.textContent = curName;
+    if (userEl) userEl.textContent = '@' + curUsername.replace(/^@/, '');
+    if (initialEl) initialEl.textContent = curName.charAt(0).toUpperCase() || 'P';
+
+    if (badgeEl) {
+      badgeEl.innerHTML = `
+        <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        ${isAdmin ? 'Mode Admin (Semua Data)' : 'Mode Pribadi (Terisolasi)'}
+      `;
+      badgeEl.className = `role-badge ${isAdmin ? 'admin' : 'pribadi'}`;
+      badgeEl.style.background = isAdmin ? '#fef3c7' : '#eef2ff';
+      badgeEl.style.color = isAdmin ? '#b45309' : '#4f46e5';
+    }
+  }
+
+  function saveAuthSession(user) {
+    appState.profile = {
+      userId: user.userId,
+      userName: user.name || user.userName || 'Pengguna',
+      role: user.role || 'pribadi',
+      username: user.username || user.userId
+    };
+    localStorage.setItem('reading_list_auth_user', JSON.stringify(appState.profile));
+    localStorage.setItem('reading_list_user_id', appState.profile.userId);
+    localStorage.setItem('reading_list_user_name', appState.profile.userName);
+    localStorage.setItem('reading_list_user_role', appState.profile.role);
+    updateSettingsAccountCard();
+  }
+
+  function getLocalRegisteredUsers() {
+    try {
+      return JSON.parse(localStorage.getItem('reading_list_registered_users') || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveLocalRegisteredUser(newUser) {
+    const users = getLocalRegisteredUsers();
+    const idx = users.findIndex(u => u.username.toLowerCase() === newUser.username.toLowerCase());
+    if (idx >= 0) {
+      users[idx] = newUser;
+    } else {
+      users.push(newUser);
+    }
+    localStorage.setItem('reading_list_registered_users', JSON.stringify(users));
+  }
+
+  function openAuthModal(defaultTab = 'login') {
+    const modal = document.getElementById('modal-auth');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    const tabLogin = document.getElementById('tab-auth-login');
+    const tabRegister = document.getElementById('tab-auth-register');
+    const formLogin = document.getElementById('form-auth-login');
+    const formRegister = document.getElementById('form-auth-register');
+
+    if (defaultTab === 'register') {
+      if (tabRegister) tabRegister.classList.add('active');
+      if (tabLogin) tabLogin.classList.remove('active');
+      if (formRegister) formRegister.classList.remove('hidden');
+      if (formLogin) formLogin.classList.add('hidden');
+    } else {
+      if (tabLogin) tabLogin.classList.add('active');
+      if (tabRegister) tabRegister.classList.remove('active');
+      if (formLogin) formLogin.classList.remove('hidden');
+      if (formRegister) formRegister.classList.add('hidden');
+    }
+  }
+
+  function closeAuthModal() {
+    const modal = document.getElementById('modal-auth');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function initAuthSystem() {
+    const tabLogin = document.getElementById('tab-auth-login');
+    const tabRegister = document.getElementById('tab-auth-register');
+    const formLogin = document.getElementById('form-auth-login');
+    const formRegister = document.getElementById('form-auth-register');
+    const btnCloseAuth = document.getElementById('btn-close-auth');
+    const linkToRegister = document.getElementById('link-switch-to-register');
+    const linkToLogin = document.getElementById('link-switch-to-login');
+
+    const roleOptPribadi = document.getElementById('role-opt-pribadi');
+    const roleOptAdmin = document.getElementById('role-opt-admin');
+
+    if (tabLogin && tabRegister && formLogin && formRegister) {
+      tabLogin.addEventListener('click', () => {
+        tabLogin.classList.add('active');
+        tabRegister.classList.remove('active');
+        formLogin.classList.remove('hidden');
+        formRegister.classList.add('hidden');
+      });
+
+      tabRegister.addEventListener('click', () => {
+        tabRegister.classList.add('active');
+        tabLogin.classList.remove('active');
+        formRegister.classList.remove('hidden');
+        formLogin.classList.add('hidden');
+      });
+    }
+
+    if (linkToRegister) {
+      linkToRegister.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (tabRegister) tabRegister.click();
+      });
+    }
+
+    if (linkToLogin) {
+      linkToLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (tabLogin) tabLogin.click();
+      });
+    }
+
+    if (btnCloseAuth) {
+      btnCloseAuth.addEventListener('click', closeAuthModal);
+    }
+
+    // Role selector toggle saat mendaftar
+    if (roleOptPribadi && roleOptAdmin) {
+      roleOptPribadi.addEventListener('click', () => {
+        roleOptPribadi.classList.add('selected');
+        roleOptAdmin.classList.remove('selected');
+        const radio = roleOptPribadi.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      });
+
+      roleOptAdmin.addEventListener('click', () => {
+        roleOptAdmin.classList.add('selected');
+        roleOptPribadi.classList.remove('selected');
+        const radio = roleOptAdmin.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      });
+    }
+
+    // 1. Submit Form Login
+    if (formLogin) {
+      formLogin.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('login-username').value.trim().toLowerCase();
+        const password = document.getElementById('login-password').value.trim();
+        const btnSubmit = document.getElementById('btn-submit-login');
+
+        if (!username || !password) {
+          showToast('Username dan PIN/kata sandi wajib diisi.');
+          return;
+        }
+
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = 'Memeriksa Akun...';
+
+        try {
+          let loggedInUser = null;
+          const sheetsUrl = appState.settings.googleSheetsUrl;
+
+          // Coba autentikasi ke Google Sheets Web App terlebih dahulu
+          if (sheetsUrl) {
+            try {
+              const res = await fetch(sheetsUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                  action: 'auth_login',
+                  username,
+                  password
+                })
+              });
+              const json = await res.json();
+              if (json && json.success && json.user) {
+                loggedInUser = json.user;
+                saveLocalRegisteredUser(json.user);
+              } else if (json && json.error) {
+                throw new Error(json.error);
+              }
+            } catch (netErr) {
+              console.warn('Login cloud error or offline, fallback to local:', netErr);
+            }
+          }
+
+          // Fallback lokal jika cloud offline atau akun tersimpan di HP
+          if (!loggedInUser) {
+            const localUsers = getLocalRegisteredUsers();
+            const localFound = localUsers.find(u => u.username.toLowerCase() === username && (u.password === password || u.passwordHash === password));
+            if (localFound) {
+              loggedInUser = localFound;
+            }
+          }
+
+          if (!loggedInUser) {
+            // Jika akun baru dan offline, izinkan langsung buat sesi lokal
+            const fallbackUser = {
+              userId: 'usr_' + username.replace(/[^a-z0-9]/g, '').substring(0, 8),
+              name: username.charAt(0).toUpperCase() + username.slice(1),
+              username: username,
+              role: 'pribadi',
+              password: password
+            };
+            saveLocalRegisteredUser(fallbackUser);
+            loggedInUser = fallbackUser;
+          }
+
+          saveAuthSession(loggedInUser);
+          closeAuthModal();
+          formLogin.reset();
+          renderAll();
+
+          // Tarik data pengguna dari cloud jika terhubung
+          if (appState.settings.googleSheetsUrl) {
+            syncPullFromGoogleSheets(true);
+          }
+
+          showToast(`Berhasil masuk! Selamat datang, ${loggedInUser.name || loggedInUser.userName}.`);
+        } catch (err) {
+          showToast(err.message || 'Gagal masuk akun. Periksa username dan password.');
+        } finally {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = `
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Masuk ke Akun
+          `;
+        }
+      });
+    }
+
+    // 2. Submit Form Register
+    if (formRegister) {
+      formRegister.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('reg-name').value.trim();
+        const username = document.getElementById('reg-username').value.trim().toLowerCase().replace(/\s+/g, '');
+        const password = document.getElementById('reg-password').value.trim();
+        const selectedRoleRadio = document.querySelector('input[name="reg-role"]:checked');
+        const role = selectedRoleRadio ? selectedRoleRadio.value : 'pribadi';
+        const btnSubmit = document.getElementById('btn-submit-register');
+
+        if (!name || !username || !password) {
+          showToast('Lengkapi nama, username, dan password.');
+          return;
+        }
+
+        if (password.length < 4) {
+          showToast('Kata sandi/PIN minimal 4 karakter.');
+          return;
+        }
+
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = 'Mendaftarkan Akun...';
+
+        try {
+          const generatedUserId = 'usr_' + username + '_' + Math.random().toString(36).substring(2, 6);
+          const newUser = {
+            userId: generatedUserId,
+            name: name,
+            username: username,
+            password: password,
+            role: role
+          };
+
+          const sheetsUrl = appState.settings.googleSheetsUrl;
+          if (sheetsUrl) {
+            try {
+              const res = await fetch(sheetsUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({
+                  action: 'auth_register',
+                  name,
+                  username,
+                  password,
+                  role
+                })
+              });
+              const json = await res.json();
+              if (json && json.success && json.user) {
+                newUser.userId = json.user.userId || newUser.userId;
+              } else if (json && json.error) {
+                throw new Error(json.error);
+              }
+            } catch (netErr) {
+              console.warn('Register cloud network error:', netErr);
+            }
+          }
+
+          saveLocalRegisteredUser(newUser);
+          saveAuthSession(newUser);
+
+          // Buat folder default untuk akun baru jika belum ada
+          if (appState.folders.length === 0) {
+            appState.folders = [
+              { id: 'f-bacaan-' + Date.now(), name: 'Bahan Masakan', color: 'flame', icon: 'food', createdAt: Date.now(), userId: newUser.userId },
+              { id: 'f-manhwa-' + Date.now(), name: 'Top Manhwa OP', color: 'book', icon: 'book', createdAt: Date.now() + 1, userId: newUser.userId }
+            ];
+            saveToLocalStorage();
+            if (dbInstance) {
+              const tx = dbInstance.transaction(['folders'], 'readwrite');
+              appState.folders.forEach(f => tx.objectStore('folders').put(f));
+            }
+          }
+
+          closeAuthModal();
+          formRegister.reset();
+          renderAll();
+
+          // Sinkronisasi data awal ke Google Sheets jika terhubung
+          if (appState.settings.googleSheetsUrl) {
+            syncPushToGoogleSheets(true);
+          }
+
+          showToast(`Akun ${name} berhasil dibuat!`);
+        } catch (err) {
+          showToast(err.message || 'Gagal mendaftar akun.');
+        } finally {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = `
+            <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Buat Akun & Mulai
+          `;
+        }
+      });
+    }
+  }
+
   function initSettingsEvents() {
     const keyInput = document.getElementById('settings-gemini-key');
     const sheetsUrlInput = document.getElementById('settings-sheets-url');
@@ -2435,59 +3423,39 @@ function createJsonResponse(data) {
     keyInput.value = appState.settings.geminiApiKey || '';
     if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
 
-    // Inisialisasi Profile UI
-    const inputUserName = document.getElementById('settings-user-name');
-    const inputUserId = document.getElementById('settings-user-id');
-    const selectUserRole = document.getElementById('settings-user-role');
-    const badgeProfileRole = document.getElementById('profile-role-badge');
-    const btnRandomUserId = document.getElementById('btn-random-user-id');
-    const btnSaveProfile = document.getElementById('btn-save-profile');
+    // Inisialisasi Kartu Akun Aktif
+    updateSettingsAccountCard();
 
-    function updateProfileUI() {
-      if (inputUserName) inputUserName.value = appState.profile.userName || '';
-      if (inputUserId) inputUserId.value = appState.profile.userId || '';
-      if (selectUserRole) selectUserRole.value = appState.profile.role || 'pribadi';
-      if (badgeProfileRole) {
-        const isAdmin = appState.profile.role === 'admin';
-        badgeProfileRole.innerHTML = `
-          <svg class="svg-icon icon-xs" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          ${isAdmin ? 'Mode Admin (Semua Data)' : 'Mode Pribadi (Data Terisolasi)'}
-        `;
-        badgeProfileRole.style.background = isAdmin ? '#fef3c7' : '#eef2ff';
-        badgeProfileRole.style.color = isAdmin ? '#b45309' : '#4f46e5';
-      }
-    }
-    updateProfileUI();
-
-    if (btnRandomUserId) {
-      btnRandomUserId.addEventListener('click', () => {
-        const newId = 'user_' + Math.random().toString(36).substring(2, 7);
-        if (inputUserId) inputUserId.value = newId;
-        showToast(`ID baru dibuat: ${newId}`);
+    // Event Ganti Akun & Keluar
+    const btnSwitchAccount = document.getElementById('btn-open-auth-modal') || document.getElementById('btn-settings-switch-account');
+    if (btnSwitchAccount) {
+      btnSwitchAccount.addEventListener('click', () => {
+        openAuthModal('login');
       });
     }
 
-    if (btnSaveProfile) {
-      btnSaveProfile.addEventListener('click', () => {
-        const newName = (inputUserName ? inputUserName.value.trim() : '') || 'Pengguna';
-        const newId = (inputUserId ? inputUserId.value.trim() : '') || ('user_' + Math.random().toString(36).substring(2, 7));
-        const newRole = (selectUserRole ? selectUserRole.value : 'pribadi') || 'pribadi';
-
-        appState.profile.userName = newName;
-        appState.profile.userId = newId;
-        appState.profile.role = newRole;
-
-        localStorage.setItem('reading_list_user_name', newName);
-        localStorage.setItem('reading_list_user_id', newId);
-        localStorage.setItem('reading_list_user_role', newRole);
-
-        updateProfileUI();
-        renderAll();
-        showToast(`Profil ${newName} (${newRole === 'admin' ? 'Admin' : 'Pribadi'}) disimpan!`);
-
-        // Jika terhubung ke Google Sheets, sinkronisasi ulang
-        if (appState.settings.googleSheetsUrl) {
-          syncPullFromGoogleSheets(true);
+    const btnLogout = document.getElementById('btn-logout-auth') || document.getElementById('btn-settings-logout');
+    if (btnLogout) {
+      btnLogout.addEventListener('click', async () => {
+        const confirmed = await showConfirmDialog({
+          title: 'Keluar dari Akun?',
+          message: 'Anda akan keluar dari akun ini. Data tetap tersimpan aman di database.',
+          confirmText: 'Keluar',
+          isDanger: true
+        });
+        if (confirmed) {
+          localStorage.removeItem('reading_list_auth_user');
+          const guestId = 'user_' + Math.random().toString(36).substring(2, 7);
+          appState.profile = {
+            userId: guestId,
+            userName: 'Tamu',
+            role: 'pribadi',
+            username: 'guest_' + guestId.substring(5)
+          };
+          updateSettingsAccountCard();
+          renderAll();
+          showToast('Anda telah keluar. Silakan masuk atau daftar.');
+          openAuthModal('login');
         }
       });
     }
@@ -2496,7 +3464,7 @@ function createJsonResponse(data) {
     document.getElementById('btn-open-settings').addEventListener('click', () => {
       keyInput.value = appState.settings.geminiApiKey || '';
       if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
-      updateProfileUI();
+      updateSettingsAccountCard();
       dom.modalSettings.classList.remove('hidden');
     });
 
@@ -2505,7 +3473,7 @@ function createJsonResponse(data) {
       badgeCloud.addEventListener('click', () => {
         keyInput.value = appState.settings.geminiApiKey || '';
         if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
-        updateProfileUI();
+        updateSettingsAccountCard();
         dom.modalSettings.classList.remove('hidden');
         if (sheetsUrlInput) {
           setTimeout(() => sheetsUrlInput.focus(), 300);
@@ -3068,10 +4036,17 @@ function createJsonResponse(data) {
       renderItemsFeed();
     });
 
-    // Sort
-    dom.sortSelect.addEventListener('change', () => {
-      appState.sortBy = dom.sortSelect.value;
-      renderItemsFeed();
+    // Sort Custom APK Dropdown
+    setupApkDropdown({
+      triggerBtn: document.getElementById('btn-trigger-sort'),
+      menuEl: document.getElementById('menu-dropdown-sort'),
+      displayLabelEl: document.getElementById('sort-display-label'),
+      selectEl: dom.sortSelect,
+      initialValue: appState.sortBy || 'recent',
+      onChange: (val) => {
+        appState.sortBy = val;
+        renderItemsFeed();
+      }
     });
 
     // View Mode Toggle (Grid Poster Lega vs List Lebar)
@@ -3100,6 +4075,7 @@ function createJsonResponse(data) {
     initFolderEvents();
     initSettingsEvents();
     initStatsEvents();
+    initAuthSystem();
 
     renderAll();
 

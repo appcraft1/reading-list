@@ -33,7 +33,7 @@ git add .
 echo.
 
 echo [5/6] Melakukan commit perubahan...
-git commit -m "fix: github action apk build runner and cloud configuration"
+git commit -m "feat: login register auth, custom apk dropdowns, 12 folder colors and icons, responsive settings"
 if %errorlevel% neq 0 (
     echo [INFO] Tidak ada perubahan baru yang perlu di-commit, atau commit sudah dibuat.
 )

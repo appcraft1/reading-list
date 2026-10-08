@@ -19,6 +19,22 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Failsafe auto-dismiss splash screen: Menjamin splash screen PASTI hilang maksimal 1.8 detik -->
+  <script>
+    (function() {
+      function forceHideSplash() {
+        var splash = document.getElementById('app-splash-screen');
+        if (splash && !splash.classList.contains('hidden-splash')) {
+          splash.classList.add('hidden-splash');
+          setTimeout(function() { splash.style.display = 'none'; }, 500);
+        }
+      }
+      setTimeout(forceHideSplash, 1800);
+      window.addEventListener('load', function() {
+        setTimeout(forceHideSplash, 800);
+      });
+    })();
+  </script>
 
   <!-- =========================================================================
        1. BRANDED SPLASH / LOADING SCREEN (CERAH & PREMIUM)

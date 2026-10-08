@@ -13,16 +13,7 @@ if (!fs.existsSync(wwwDir)) {
 
 // 2. Pastikan file mascot.jpg ada di root
 const mascotSrc = path.join(rootDir, 'mascot.jpg');
-const brainMascot = 'C:\\Users\\Asep\\.gemini\\antigravity-ide\\brain\\f305f649-c532-4315-af35-16931117f303\\reading_list_mascot_1791318084371.jpg';
 
-if (!fs.existsSync(mascotSrc) && fs.existsSync(brainMascot)) {
-  try {
-    fs.copyFileSync(brainMascot, mascotSrc);
-    console.log('✅ mascot.jpg disalin dari cache AI generator');
-  } catch (e) {
-    console.warn('Catatan: mascot.jpg menggunakan fallback');
-  }
-}
 
 if (fs.existsSync(mascotSrc)) {
   fs.copyFileSync(mascotSrc, path.join(wwwDir, 'mascot.jpg'));

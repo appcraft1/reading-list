@@ -6,8 +6,8 @@
 (function () {
   'use strict';
 
-  const LOCAL_VERSION = '1.1.1';
-  const LOCAL_VERSION_CODE = 3;
+  const LOCAL_VERSION = '1.2.0';
+  const LOCAL_VERSION_CODE = 4;
   const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/appcraft1/reading-list/main/version.json';
 
   async function checkAppUpdates() {

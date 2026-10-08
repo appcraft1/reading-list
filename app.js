@@ -3420,7 +3420,7 @@ function createJsonResponse(data) {
     const keyInput = document.getElementById('settings-gemini-key');
     const sheetsUrlInput = document.getElementById('settings-sheets-url');
 
-    keyInput.value = appState.settings.geminiApiKey || '';
+    if (keyInput) keyInput.value = appState.settings.geminiApiKey || '';
     if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
 
     // Inisialisasi Kartu Akun Aktif
@@ -3461,41 +3461,53 @@ function createJsonResponse(data) {
     }
 
     // Open & Close Settings Modal
-    document.getElementById('btn-open-settings').addEventListener('click', () => {
-      keyInput.value = appState.settings.geminiApiKey || '';
-      if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
-      updateSettingsAccountCard();
-      dom.modalSettings.classList.remove('hidden');
-    });
+    const btnOpenSettings = document.getElementById('btn-open-settings');
+    if (btnOpenSettings) {
+      btnOpenSettings.addEventListener('click', () => {
+        if (keyInput) keyInput.value = appState.settings.geminiApiKey || '';
+        if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
+        updateSettingsAccountCard();
+        if (dom.modalSettings) dom.modalSettings.classList.remove('hidden');
+      });
+    }
 
     const badgeCloud = document.getElementById('badge-cloud-indicator');
     if (badgeCloud) {
       badgeCloud.addEventListener('click', () => {
-        keyInput.value = appState.settings.geminiApiKey || '';
+        if (keyInput) keyInput.value = appState.settings.geminiApiKey || '';
         if (sheetsUrlInput) sheetsUrlInput.value = appState.settings.googleSheetsUrl || '';
         updateSettingsAccountCard();
-        dom.modalSettings.classList.remove('hidden');
+        if (dom.modalSettings) dom.modalSettings.classList.remove('hidden');
         if (sheetsUrlInput) {
           setTimeout(() => sheetsUrlInput.focus(), 300);
         }
       });
     }
 
-    document.getElementById('btn-close-settings').addEventListener('click', () => {
-      dom.modalSettings.classList.add('hidden');
-    });
-    document.getElementById('btn-done-settings').addEventListener('click', () => {
-      dom.modalSettings.classList.add('hidden');
-    });
+    const btnCloseSettings = document.getElementById('btn-close-settings');
+    if (btnCloseSettings) {
+      btnCloseSettings.addEventListener('click', () => {
+        if (dom.modalSettings) dom.modalSettings.classList.add('hidden');
+      });
+    }
+    const btnDoneSettings = document.getElementById('btn-done-settings');
+    if (btnDoneSettings) {
+      btnDoneSettings.addEventListener('click', () => {
+        if (dom.modalSettings) dom.modalSettings.classList.add('hidden');
+      });
+    }
 
     // Gemini API Key Save
-    document.getElementById('btn-save-gemini-key').addEventListener('click', () => {
-      const key = keyInput.value.trim();
-      appState.settings.geminiApiKey = key;
-      localStorage.setItem('gemini_api_key', key);
-      updateAiBadge();
-      showToast(key ? 'Gemini 3.8 Flash API Key aktif!' : 'API Key dikosongkan.');
-    });
+    const btnSaveGeminiKey = document.getElementById('btn-save-gemini-key');
+    if (btnSaveGeminiKey && keyInput) {
+      btnSaveGeminiKey.addEventListener('click', () => {
+        const key = keyInput.value.trim();
+        appState.settings.geminiApiKey = key;
+        localStorage.setItem('gemini_api_key', key);
+        updateAiBadge();
+        showToast(key ? 'Gemini 3.8 Flash API Key aktif!' : 'API Key dikosongkan.');
+      });
+    }
 
     // Google Sheets Events
     const btnSaveSheets = document.getElementById('btn-save-sheets-url');
@@ -3979,142 +3991,178 @@ function createJsonResponse(data) {
   }
 
   // =========================================================================
-  // 10. INITIALIZATION
+  // 10. INITIALIZATION & FAILSAFE SPLASH DISMISS
   // =========================================================================
+  function hideSplashScreen() {
+    const splash = document.getElementById('app-splash-screen');
+    const splashStatus = document.getElementById('splash-status-text');
+    if (splashStatus) splashStatus.textContent = 'Siap!';
+    if (splash) {
+      splash.classList.add('hidden-splash');
+      setTimeout(() => {
+        splash.style.display = 'none';
+      }, 500);
+    }
+  }
+
   async function initApp() {
-    await initDatabase();
+    try {
+      await initDatabase();
 
-    // Bind Navigation & Manual Adds
-    document.getElementById('dock-btn-scan').addEventListener('click', openScannerModal);
-    document.getElementById('btn-empty-scan').addEventListener('click', openScannerModal);
-    document.getElementById('btn-close-scanner').addEventListener('click', closeScannerModal);
-    document.getElementById('btn-cancel-scan').addEventListener('click', closeScannerModal);
+      // Bind Navigation & Manual Adds (dengan pengecekan aman)
+      const btnDockScan = document.getElementById('dock-btn-scan');
+      if (btnDockScan) btnDockScan.addEventListener('click', openScannerModal);
 
-    // Tombol Tambah Manual (+ Judul di header feed, di floating dock, dan di empty state)
-    if (dom.btnAddManualItem) {
-      dom.btnAddManualItem.addEventListener('click', () => openItemDetailModal(null));
-    }
-    if (dom.btnEmptyAddManual) {
-      dom.btnEmptyAddManual.addEventListener('click', () => openItemDetailModal(null));
-    }
-    if (dom.dockBtnAdd) {
-      dom.dockBtnAdd.addEventListener('click', () => openItemDetailModal(null));
-    }
+      const btnEmptyScan = document.getElementById('btn-empty-scan');
+      if (btnEmptyScan) btnEmptyScan.addEventListener('click', openScannerModal);
 
-    // Tombol Quick Sync Google Sheets di Header
-    if (dom.btnQuickSync) {
-      dom.btnQuickSync.addEventListener('click', () => {
-        triggerNativeHaptic();
-        syncPullFromGoogleSheets(false);
-      });
-    }
+      const btnCloseScanner = document.getElementById('btn-close-scanner');
+      if (btnCloseScanner) btnCloseScanner.addEventListener('click', closeScannerModal);
 
-    // Dock Button: Home (Koleksi)
-    document.getElementById('dock-btn-home').addEventListener('click', () => {
-      appState.activeFolderId = 'all';
-      appState.statusFilter = null;
-      renderAll();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+      const btnCancelScan = document.getElementById('btn-cancel-scan');
+      if (btnCancelScan) btnCancelScan.addEventListener('click', closeScannerModal);
 
-    // Dock Button: Statistik & Rekap
-    const btnStats = document.getElementById('dock-btn-stats');
-    if (btnStats) {
-      btnStats.addEventListener('click', openStatsModal);
-    }
-
-    // Search
-    dom.searchInput.addEventListener('input', () => {
-      appState.searchQuery = dom.searchInput.value;
-      dom.btnClearSearch.classList.toggle('hidden', !appState.searchQuery.trim());
-      renderItemsFeed();
-    });
-    dom.btnClearSearch.addEventListener('click', () => {
-      dom.searchInput.value = '';
-      appState.searchQuery = '';
-      dom.btnClearSearch.classList.add('hidden');
-      renderItemsFeed();
-    });
-
-    // Sort Custom APK Dropdown
-    setupApkDropdown({
-      triggerBtn: document.getElementById('btn-trigger-sort'),
-      menuEl: document.getElementById('menu-dropdown-sort'),
-      displayLabelEl: document.getElementById('sort-display-label'),
-      selectEl: dom.sortSelect,
-      initialValue: appState.sortBy || 'recent',
-      onChange: (val) => {
-        appState.sortBy = val;
-        renderItemsFeed();
+      // Tombol Tambah Manual (+ Judul di header feed, di floating dock, dan di empty state)
+      if (dom.btnAddManualItem) {
+        dom.btnAddManualItem.addEventListener('click', () => openItemDetailModal(null));
       }
-    });
+      if (dom.btnEmptyAddManual) {
+        dom.btnEmptyAddManual.addEventListener('click', () => openItemDetailModal(null));
+      }
+      if (dom.dockBtnAdd) {
+        dom.dockBtnAdd.addEventListener('click', () => openItemDetailModal(null));
+      }
 
-    // View Mode Toggle (Grid Poster Lega vs List Lebar)
-    const btnViewGrid = document.getElementById('btn-view-grid');
-    const btnViewList = document.getElementById('btn-view-list');
-    if (btnViewGrid) {
-      btnViewGrid.addEventListener('click', () => {
-        appState.viewMode = 'grid';
-        localStorage.setItem('reading_list_view_mode', 'grid');
-        triggerNativeHaptic();
-        renderItemsFeed();
+      // Tombol Quick Sync Google Sheets di Header
+      if (dom.btnQuickSync) {
+        dom.btnQuickSync.addEventListener('click', () => {
+          triggerNativeHaptic();
+          syncPullFromGoogleSheets(false);
+        });
+      }
+
+      // Dock Button: Home (Koleksi)
+      const btnDockHome = document.getElementById('dock-btn-home');
+      if (btnDockHome) {
+        btnDockHome.addEventListener('click', () => {
+          appState.activeFolderId = 'all';
+          appState.statusFilter = null;
+          renderAll();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      }
+
+      // Dock Button: Statistik & Rekap
+      const btnStats = document.getElementById('dock-btn-stats');
+      if (btnStats) {
+        btnStats.addEventListener('click', openStatsModal);
+      }
+
+      // Search
+      if (dom.searchInput) {
+        dom.searchInput.addEventListener('input', () => {
+          appState.searchQuery = dom.searchInput.value;
+          if (dom.btnClearSearch) {
+            dom.btnClearSearch.classList.toggle('hidden', !appState.searchQuery.trim());
+          }
+          renderItemsFeed();
+        });
+      }
+      if (dom.btnClearSearch && dom.searchInput) {
+        dom.btnClearSearch.addEventListener('click', () => {
+          dom.searchInput.value = '';
+          appState.searchQuery = '';
+          dom.btnClearSearch.classList.add('hidden');
+          renderItemsFeed();
+        });
+      }
+
+      // Sort Custom APK Dropdown
+      const triggerSort = document.getElementById('btn-trigger-sort');
+      if (triggerSort) {
+        setupApkDropdown({
+          triggerBtn: triggerSort,
+          menuEl: document.getElementById('menu-dropdown-sort'),
+          displayLabelEl: document.getElementById('sort-display-label'),
+          selectEl: dom.sortSelect,
+          initialValue: appState.sortBy || 'recent',
+          onChange: (val) => {
+            appState.sortBy = val;
+            renderItemsFeed();
+          }
+        });
+      }
+
+      // View Mode Toggle (Grid Poster Lega vs List Lebar)
+      const btnViewGrid = document.getElementById('btn-view-grid');
+      const btnViewList = document.getElementById('btn-view-list');
+      if (btnViewGrid) {
+        btnViewGrid.addEventListener('click', () => {
+          appState.viewMode = 'grid';
+          localStorage.setItem('reading_list_view_mode', 'grid');
+          triggerNativeHaptic();
+          renderItemsFeed();
+        });
+      }
+      if (btnViewList) {
+        btnViewList.addEventListener('click', () => {
+          appState.viewMode = 'list';
+          localStorage.setItem('reading_list_view_mode', 'list');
+          triggerNativeHaptic();
+          renderItemsFeed();
+        });
+      }
+
+      // Modules
+      try { initScannerEvents(); } catch (e) { console.warn('initScannerEvents warn:', e); }
+      try { initItemFormEvents(); } catch (e) { console.warn('initItemFormEvents warn:', e); }
+      try { initFolderEvents(); } catch (e) { console.warn('initFolderEvents warn:', e); }
+      try { initSettingsEvents(); } catch (e) { console.warn('initSettingsEvents warn:', e); }
+      try { initStatsEvents(); } catch (e) { console.warn('initStatsEvents warn:', e); }
+      try { initAuthSystem(); } catch (e) { console.warn('initAuthSystem warn:', e); }
+
+      renderAll();
+
+      // Auto-sync dari Google Sheets saat aplikasi pertama dibuka
+      if (appState.settings && appState.settings.googleSheetsUrl) {
+        syncPullFromGoogleSheets(true);
+      }
+
+      // Event listener saat user berganti aplikasi (multitasking Android):
+      // Memastikan antrean scanning resume jika terjeda & auto-pull data terbaru dari Google Sheets
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (appState.scanQueue && appState.scanQueue.some(j => j.status === 'pending') && !appState.isScanningActive) {
+            processScanQueue();
+          }
+          if (appState.settings && appState.settings.googleSheetsUrl) {
+            syncPullFromGoogleSheets(true);
+          }
+        }
       });
-    }
-    if (btnViewList) {
-      btnViewList.addEventListener('click', () => {
-        appState.viewMode = 'list';
-        localStorage.setItem('reading_list_view_mode', 'list');
-        triggerNativeHaptic();
-        renderItemsFeed();
-      });
-    }
 
-    // Modules
-    initScannerEvents();
-    initItemFormEvents();
-    initFolderEvents();
-    initSettingsEvents();
-    initStatsEvents();
-    initAuthSystem();
-
-    renderAll();
-
-    // Auto-sync dari Google Sheets saat aplikasi pertama dibuka
-    if (appState.settings.googleSheetsUrl) {
-      syncPullFromGoogleSheets(true);
-    }
-
-    // Event listener saat user berganti aplikasi (multitasking Android):
-    // Memastikan antrean scanning resume jika terjeda & auto-pull data terbaru dari Google Sheets
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
+      window.addEventListener('focus', () => {
         if (appState.scanQueue && appState.scanQueue.some(j => j.status === 'pending') && !appState.isScanningActive) {
           processScanQueue();
         }
-        if (appState.settings.googleSheetsUrl) {
+        if (appState.settings && appState.settings.googleSheetsUrl) {
           syncPullFromGoogleSheets(true);
         }
-      }
-    });
-
-    window.addEventListener('focus', () => {
-      if (appState.scanQueue && appState.scanQueue.some(j => j.status === 'pending') && !appState.isScanningActive) {
-        processScanQueue();
-      }
-      if (appState.settings.googleSheetsUrl) {
-        syncPullFromGoogleSheets(true);
-      }
-    });
-
-    // Branded Splash Loading Screen (Khusus APK Mobile)
-    if (dom.splashStatus) dom.splashStatus.textContent = 'Menyiapkan rak koleksi...';
-    setTimeout(() => {
-      if (dom.splashStatus) dom.splashStatus.textContent = 'Siap!';
-      setTimeout(() => {
-        if (dom.splash) dom.splash.classList.add('hidden-splash');
-      }, 250);
-    }, 1100);
+      });
+    } catch (err) {
+      console.error('[CRITICAL] Exception in initApp:', err);
+    } finally {
+      // Pastikan Splash Loading Screen PASTI tertutup
+      setTimeout(hideSplashScreen, 800);
+    }
   }
 
-  document.addEventListener('DOMContentLoaded', initApp);
+  // Safety timer darurat: Jangan pernah biarkan splash screen bertahan lebih dari 2 detik
+  setTimeout(hideSplashScreen, 2000);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+  } else {
+    initApp();
+  }
 })();

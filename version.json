@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1",
-  "versionCode": 3,
+  "version": "1.2.0",
+  "versionCode": 4,
   "appName": "Reading List",
-  "changeLog": "Pembaruan v1.1.1: Penataan Badge Cover Bersih, Tombol Bawah Ramping (3 Menu), Dialog Konfirmasi & Dropdown Modern Tanpa Bawaan Browser, Safe Area HP Lega.",
+  "changeLog": "Pembaruan v1.2.0: Failsafe Splash Screen Instan, Sistem Multi-Akun & Login Terpisah 1 Database, 12 Warna & Ikon Rak, Perbaikan Compile APK.",
   "updateType": "ota"
 }

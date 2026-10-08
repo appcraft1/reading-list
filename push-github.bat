@@ -54,13 +54,13 @@ echo [OK] Seluruh berkas siap di-commit.
 echo.
 
 echo [5/6] Melakukan commit perubahan...
-git commit -m "feat: login register auth, custom apk dropdowns, 12 folder colors and icons, responsive settings"
+git commit -m "fix: auto-dismiss splash screen failsafe and fix github actions apk compile workflow"
 if %errorlevel% neq 0 (
     echo [INFO] Tidak ada perubahan baru atau commit sudah dibuat sebelumnya.
 )
 echo.
 
-echo [6/6] Melakukan sinkronisasi & push ke GitHub...
+echo [6/6] Melakukan sinkronisasi dan push ke GitHub...
 echo Menarik update terbaru dari GitHub (rebase)...
 git pull --rebase origin main
 echo.

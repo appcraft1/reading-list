@@ -351,8 +351,8 @@ function getAllData(reqUserId, reqRole) {
       // Filter hak akses:
       // Jika role bukan admin, periksa kepemilikan data:
       if (!isAdmin) {
-        // Izinkan data jika milik user ini, ATAU data lama/bawaan (rowUserId kosong atau 'system')
-        const isOwner = !rowUserId || rowUserId === 'system' || (reqUserId && rowUserId === reqUserId);
+        // Mode Pribadi: Hanya ambil data milik user ini (reqUserId), atau template bawaan ('system')
+        const isOwner = (reqUserId && rowUserId === reqUserId) || rowUserId === 'system';
         if (!isOwner) {
           continue; // Lewati data milik pengguna lain
         }

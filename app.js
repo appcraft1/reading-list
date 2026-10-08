@@ -435,9 +435,18 @@
     }
   }
 
+  function getUserAccessibleItems() {
+    if (appState.profile.role === 'admin') {
+      return appState.items;
+    }
+    const myId = appState.profile.userId;
+    return appState.items.filter(i => !i.userId || i.userId === 'system' || i.userId === myId);
+  }
+
   function updateHeaderStats() {
-    const total = appState.items.length;
-    const reading = appState.items.filter(i => i.status === 'reading').length;
+    const accessible = getUserAccessibleItems();
+    const total = accessible.length;
+    const reading = accessible.filter(i => i.status === 'reading').length;
     dom.headerStats.textContent = `${total} judul tersimpan • ${reading} sedang dibaca`;
     dom.shelfCountText.textContent = `${appState.folders.length} Folder`;
   }
@@ -445,6 +454,7 @@
   // Render Visual Folder Cards (Bukan Chip! Bentuk Bento Card dengan SVG Bespoke)
   function renderVisualFolders() {
     dom.foldersScrollTrack.innerHTML = '';
+    const accessible = getUserAccessibleItems();
 
     // 1. Folder "Semua Koleksi"
     const allTheme = FOLDER_THEMES.all;
@@ -456,7 +466,7 @@
       </div>
       <div>
         <span class="folder-name-text">Semua</span>
-        <span class="folder-meta-text">${appState.items.length} Judul</span>
+        <span class="folder-meta-text">${accessible.length} Judul</span>
       </div>
     `;
     allCard.addEventListener('click', () => {
@@ -469,7 +479,7 @@
     // 2. Folder-Folder Dinamis
     appState.folders.forEach(folder => {
       const theme = FOLDER_THEMES[folder.color] || FOLDER_THEMES.book;
-      const count = appState.items.filter(i => i.folderId === folder.id).length;
+      const count = accessible.filter(i => i.folderId === folder.id).length;
 
       const card = document.createElement('div');
       card.className = `visual-folder-card ${appState.activeFolderId === folder.id && !appState.statusFilter ? 'active' : ''}`;
@@ -517,7 +527,9 @@
 
   // Render Reading List Feed (Bento Cards: Cover 2:3, Judul, Sinopsis, Status)
   function renderItemsFeed() {
-    let filtered = appState.items.filter(item => {
+    const accessible = getUserAccessibleItems();
+
+    let filtered = accessible.filter(item => {
       if (appState.statusFilter && item.status !== appState.statusFilter) {
         return false;
       }
@@ -577,7 +589,7 @@
     }
   }
 
-  // Tampilan 1: Grid Poster Lega (Cover 2:3 Besar, Luas & Memanjakan Mata)
+  // Tampilan 1: Grid Poster Lega (Cover 2:3 Besar, Luas & Bebas Badge Menumpuk)
   function createReadingPosterCard(item) {
     const folder = getFolderForItem(item.folderId);
     const folderName = folder ? folder.name : (item.folderId || 'Umum');
@@ -587,10 +599,11 @@
     card.setAttribute('data-id', item.id);
 
     const statusMap = {
-      plan: 'Ingin Dibaca',
-      reading: 'Sedang Dibaca',
-      completed: 'Selesai'
+      plan: 'Ingin Baca',
+      reading: 'Dibaca',
+      completed: 'Tamat'
     };
+    const statusKey = item.status || 'plan';
 
     const coverHtml = renderPosterCoverHtml(item, folder);
 
@@ -598,14 +611,15 @@
       <div class="poster-cover-wrap">
         ${coverHtml}
         <div class="poster-floating-status">
-          <span class="badge-status status-${item.status || 'plan'}">${statusMap[item.status] || 'Ingin Dibaca'}</span>
+          <span class="badge-status-micro status-${statusKey}">
+            <span class="status-micro-dot dot-${statusKey}"></span>
+            ${statusMap[statusKey] || 'Ingin Baca'}
+          </span>
         </div>
-        <div class="poster-floating-folder">
-          <span class="badge-folder-tag">${escapeHTML(folderName)}</span>
-          ${(appState.profile.role === 'admin' && item.userName) ? `<span class="item-user-tag">👤 ${escapeHTML(item.userName)}</span>` : ''}
-        </div>
+        ${(appState.profile.role === 'admin' && item.userName) ? `<div class="poster-owner-tag" title="Pemilik: ${escapeHTML(item.userName)}">👤 ${escapeHTML(item.userName)}</div>` : ''}
       </div>
       <div class="poster-info-wrap">
+        <span class="poster-folder-chip">${escapeHTML(folderName)}</span>
         <h4 class="poster-title-text" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</h4>
         ${item.desc ? `<p class="poster-desc-text">${escapeHTML(item.desc)}</p>` : ''}
         <div class="poster-footer-row">
@@ -640,10 +654,11 @@
     card.setAttribute('data-id', item.id);
 
     const statusMap = {
-      plan: 'Ingin Dibaca',
-      reading: 'Sedang Dibaca',
-      completed: 'Selesai'
+      plan: 'Ingin Baca',
+      reading: 'Dibaca',
+      completed: 'Tamat'
     };
+    const statusKey = item.status || 'plan';
 
     const coverHtml = renderBentoCoverHtml(item, folder);
 
@@ -655,8 +670,11 @@
         <div>
           <div class="card-header-line">
             <div class="card-badges-row">
-              <span class="badge-status status-${item.status || 'plan'}">${statusMap[item.status] || 'Ingin Dibaca'}</span>
-              <span class="badge-folder-tag">${escapeHTML(folderName)}</span>
+              <span class="badge-status-micro status-${statusKey}">
+                <span class="status-micro-dot dot-${statusKey}"></span>
+                ${statusMap[statusKey] || 'Ingin Baca'}
+              </span>
+              <span class="poster-folder-chip">${escapeHTML(folderName)}</span>
               ${(appState.profile.role === 'admin' && item.userName) ? `<span class="item-user-tag">👤 ${escapeHTML(item.userName)}</span>` : ''}
             </div>
           </div>
@@ -1586,9 +1604,16 @@ Format WAJIB: JSON array murni tanpa format markdown:
       showToast('Data bacaan berhasil disimpan!');
     });
 
-    document.getElementById('btn-delete-item').addEventListener('click', () => {
+    document.getElementById('btn-delete-item').addEventListener('click', async () => {
       const id = document.getElementById('item-id-hidden').value;
-      if (id && confirm('Hapus bacaan ini dari koleksi?')) {
+      if (!id) return;
+      const confirmed = await showConfirmDialog({
+        title: 'Hapus Karya Bacaan?',
+        message: 'Karya ini akan dihapus permanen dari rak koleksi.',
+        confirmText: 'Hapus',
+        isDanger: true
+      });
+      if (confirmed) {
         appState.items = appState.items.filter(i => i.id !== id);
         deleteItemFromDB(id);
         closeItemDetailModal();
@@ -1677,9 +1702,16 @@ Format WAJIB: JSON array murni tanpa format markdown:
       showToast('Folder berhasil disimpan!');
     });
 
-    document.getElementById('btn-delete-folder').addEventListener('click', () => {
+    document.getElementById('btn-delete-folder').addEventListener('click', async () => {
       const id = document.getElementById('folder-id-hidden').value;
-      if (id && confirm('Hapus folder ini? Item di dalamnya tetap aman dan dipindahkan ke Umum.')) {
+      if (!id) return;
+      const confirmed = await showConfirmDialog({
+        title: 'Hapus Folder Rak?',
+        message: 'Item di dalamnya tetap aman dan dipindahkan ke rak Umum.',
+        confirmText: 'Hapus Folder',
+        isDanger: true
+      });
+      if (confirmed) {
         appState.folders = appState.folders.filter(f => f.id !== id);
         deleteFolderFromDB(id);
         if (appState.activeFolderId === id) appState.activeFolderId = 'all';
@@ -2036,7 +2068,7 @@ function getAllData(reqUserId, reqRole) {
       if (!rawTitle) rawTitle = 'Tanpa Judul';
 
       if (!isAdmin) {
-        const isOwner = !rowUserId || rowUserId === 'system' || (reqUserId && rowUserId === reqUserId);
+        const isOwner = (reqUserId && rowUserId === reqUserId) || rowUserId === 'system';
         if (!isOwner) {
           continue;
         }
@@ -2593,12 +2625,18 @@ function createJsonResponse(data) {
       }
     });
 
-    document.getElementById('btn-load-sample-data').addEventListener('click', () => {
+    document.getElementById('btn-load-sample-data').addEventListener('click', async () => {
       if (appState.settings.googleSheetsUrl) {
         syncPullFromGoogleSheets();
         return;
       }
-      if (confirm('Tarik atau muat ulang data contoh?')) {
+      const confirmed = await showConfirmDialog({
+        title: 'Muat Koleksi Contoh?',
+        message: 'Koleksi contoh manhwa & novel akan ditambahkan ke rak lo.',
+        confirmText: 'Muat Contoh',
+        isDanger: false
+      });
+      if (confirmed) {
         const defaultFolders = [
           { id: 'f-manhwa', name: 'Top Manhwa OP', color: 'flame', createdAt: Date.now() - 400000 },
           { id: 'f-novel',  name: 'Webnovel & Buku', color: 'book', createdAt: Date.now() - 300000 },
@@ -2606,12 +2644,12 @@ function createJsonResponse(data) {
           { id: 'f-santai', name: 'Santai & Slice of Life', color: 'leaf', createdAt: Date.now() - 100000 }
         ];
         const defaultItems = [
-          { id: 'item-1', title: 'Solo Leveling (Only I Level Up)', folderId: 'f-manhwa', status: 'completed', desc: 'Sung Jin-woo mendapatkan System rahasia setelah selamat dari Double Dungeon misterius.', coverUrl: '', createdAt: Date.now() - 500000 },
-          { id: 'item-2', title: "Omniscient Reader's Viewpoint", folderId: 'f-manhwa', status: 'reading', desc: 'Kim Dokja adalah satu-satunya pembaca novel web apokaliptik yang menjadi kenyataan.', coverUrl: '', createdAt: Date.now() - 400000 },
-          { id: 'item-3', title: 'Return of the Blossoming Blade', folderId: 'f-manhwa', status: 'reading', desc: 'Chung Myung bangkit kembali 100 tahun kemudian untuk membangkitkan sektenya.', coverUrl: '', createdAt: Date.now() - 300000 },
-          { id: 'item-4', title: 'The Beginning After The End', folderId: 'f-manhwa', status: 'reading', desc: 'Raja Grey bereinkarnasi sebagai Arthur Leywin di dunia sihir dan monster.', coverUrl: '', createdAt: Date.now() - 200000 },
-          { id: 'item-5', title: 'Atomic Habits', folderId: 'f-novel', status: 'completed', desc: 'Perubahan kecil yang memberikan hasil luar biasa dalam membangun kebiasaan baik.', coverUrl: '', createdAt: Date.now() - 100000 },
-          { id: 'item-6', title: 'Sousou no Frieren', folderId: 'f-anime', status: 'plan', desc: 'Penyihir elf Frieren merefleksikan arti kehidupan manusia setelah mengalahkan Raja Iblis.', coverUrl: '', createdAt: Date.now() - 50000 }
+          { id: 'item-1', title: 'Solo Leveling (Only I Level Up)', folderId: 'f-manhwa', status: 'completed', desc: 'Sung Jin-woo mendapatkan System rahasia setelah selamat dari Double Dungeon misterius.', coverUrl: '', createdAt: Date.now() - 500000, userId: appState.profile.userId, userName: appState.profile.userName },
+          { id: 'item-2', title: "Omniscient Reader's Viewpoint", folderId: 'f-manhwa', status: 'reading', desc: 'Kim Dokja adalah satu-satunya pembaca novel web apokaliptik yang menjadi kenyataan.', coverUrl: '', createdAt: Date.now() - 400000, userId: appState.profile.userId, userName: appState.profile.userName },
+          { id: 'item-3', title: 'Return of the Blossoming Blade', folderId: 'f-manhwa', status: 'reading', desc: 'Chung Myung bangkit kembali 100 tahun kemudian untuk membangkitkan sektenya.', coverUrl: '', createdAt: Date.now() - 300000, userId: appState.profile.userId, userName: appState.profile.userName },
+          { id: 'item-4', title: 'The Beginning After The End', folderId: 'f-manhwa', status: 'reading', desc: 'Raja Grey bereinkarnasi sebagai Arthur Leywin di dunia sihir dan monster.', coverUrl: '', createdAt: Date.now() - 200000, userId: appState.profile.userId, userName: appState.profile.userName },
+          { id: 'item-5', title: 'Atomic Habits', folderId: 'f-novel', status: 'completed', desc: 'Perubahan kecil yang memberikan hasil luar biasa dalam membangun kebiasaan baik.', coverUrl: '', createdAt: Date.now() - 100000, userId: appState.profile.userId, userName: appState.profile.userName },
+          { id: 'item-6', title: 'Sousou no Frieren', folderId: 'f-anime', status: 'plan', desc: 'Penyihir elf Frieren merefleksikan arti kehidupan manusia setelah mengalahkan Raja Iblis.', coverUrl: '', createdAt: Date.now() - 50000, userId: appState.profile.userId, userName: appState.profile.userName }
         ];
         appState.folders = defaultFolders;
         appState.items = defaultItems;
@@ -2627,8 +2665,14 @@ function createJsonResponse(data) {
       }
     });
 
-    document.getElementById('btn-reset-all-data').addEventListener('click', () => {
-      if (confirm('Hapus semua data koleksi permanen?')) {
+    document.getElementById('btn-reset-all-data').addEventListener('click', async () => {
+      const confirmed = await showConfirmDialog({
+        title: 'Hapus Semua Data Koleksi?',
+        message: 'Seluruh koleksi di HP lo akan dibersihkan permanen. Tindakan ini tidak dapat dibatalkan.',
+        confirmText: 'Reset Permanen',
+        isDanger: true
+      });
+      if (confirmed) {
         appState.folders = [];
         appState.items = [];
         saveToLocalStorage();
@@ -2660,10 +2704,11 @@ function createJsonResponse(data) {
   }
 
   function renderStatsData() {
-    const totalItems = appState.items.length;
-    const completedItems = appState.items.filter(i => i.status === 'completed').length;
-    const readingItems = appState.items.filter(i => i.status === 'reading').length;
-    const planItems = appState.items.filter(i => i.status === 'plan' || !i.status).length;
+    const accessible = getUserAccessibleItems();
+    const totalItems = accessible.length;
+    const completedItems = accessible.filter(i => i.status === 'completed').length;
+    const readingItems = accessible.filter(i => i.status === 'reading').length;
+    const planItems = accessible.filter(i => i.status === 'plan' || !i.status).length;
     const totalFolders = appState.folders.length;
 
     // Bento Numbers
@@ -2710,7 +2755,7 @@ function createJsonResponse(data) {
         folderList.innerHTML = '<span class="text-dim" style="font-size:12px; padding: 4px 0;">Belum ada folder.</span>';
       } else {
         appState.folders.forEach(f => {
-          const count = appState.items.filter(i => i.folderId === f.id).length;
+          const count = accessible.filter(i => i.folderId === f.id).length;
           const percent = totalItems > 0 ? Math.round((count / totalItems) * 100) : 0;
           const theme = FOLDER_THEMES[f.color] || FOLDER_THEMES.book;
 
@@ -2882,6 +2927,65 @@ function createJsonResponse(data) {
     if (window.navigator && window.navigator.vibrate) {
       window.navigator.vibrate(25);
     }
+  }
+
+  function showConfirmDialog({ title = 'Konfirmasi Tindakan', message = 'Lanjutkan proses ini?', confirmText = 'Lanjutkan', cancelText = 'Batal', isDanger = false }) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('modal-confirm');
+      const elTitle = document.getElementById('confirm-title');
+      const elMsg = document.getElementById('confirm-message');
+      const btnOk = document.getElementById('btn-confirm-ok');
+      const btnCancel = document.getElementById('btn-confirm-cancel');
+      const iconWrap = document.getElementById('confirm-icon-wrap');
+
+      if (!modal) {
+        resolve(window.confirm(message));
+        return;
+      }
+
+      triggerNativeHaptic();
+      if (elTitle) elTitle.textContent = title;
+      if (elMsg) elMsg.textContent = message;
+
+      if (btnOk) {
+        btnOk.textContent = confirmText;
+        if (isDanger) {
+          btnOk.style.background = '#ef4444';
+          btnOk.style.borderColor = '#ef4444';
+          btnOk.style.color = '#ffffff';
+        } else {
+          btnOk.style.background = '';
+          btnOk.style.borderColor = '';
+          btnOk.style.color = '';
+        }
+      }
+
+      if (btnCancel) btnCancel.textContent = cancelText;
+      if (iconWrap) {
+        iconWrap.className = isDanger ? 'confirm-icon-box' : 'confirm-icon-box info';
+      }
+
+      modal.classList.remove('hidden');
+
+      function onOk() {
+        modal.classList.add('hidden');
+        cleanup();
+        triggerNativeHaptic();
+        resolve(true);
+      }
+      function onCancel() {
+        modal.classList.add('hidden');
+        cleanup();
+        resolve(false);
+      }
+      function cleanup() {
+        if (btnOk) btnOk.removeEventListener('click', onOk);
+        if (btnCancel) btnCancel.removeEventListener('click', onCancel);
+      }
+
+      if (btnOk) btnOk.addEventListener('click', onOk, { once: true });
+      if (btnCancel) btnCancel.addEventListener('click', onCancel, { once: true });
+    });
   }
 
   function formatDate(timestamp) {

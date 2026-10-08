@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0"
 title Build APK Reading List Otomatis
 echo ========================================================
 echo   BUILD APK ANDROID: READING LIST (AI VISION TRACKER)

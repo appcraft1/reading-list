@@ -1,6 +1,7 @@
 
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0"
 title Update Otomatis ke Cloud Firebase
 echo ========================================================
 echo   UPDATE KE CLOUD HOSTING (TANPA INSTALL ULANG APK!)

@@ -1,3 +1,5 @@
+Set-Location $PSScriptRoot
+
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "  PUSH REPOSITORY KE GITHUB (AMAN & OPTIMAL)" -ForegroundColor Cyan
 Write-Host "  Repository: https://github.com/appcraft1/reading-list.git" -ForegroundColor Cyan
@@ -6,6 +8,7 @@ Write-Host ""
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Host "[ERROR] Git belum terpasang atau tidak terdeteksi di PATH!" -ForegroundColor Red
+    Read-Host "Tekan Enter untuk keluar"
     exit 1
 }
 
@@ -14,7 +17,15 @@ git config http.postBuffer 524288000
 git config http.version HTTP/1.1
 
 Write-Host "`n[2/6] Menyiapkan web assets terbaru..." -ForegroundColor Yellow
-node build.js
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    node build.js
+} else {
+    Write-Host "[INFO] Node tidak terdeteksi, menyalin aset web secara langsung..." -ForegroundColor Gray
+    Copy-Item -Path "index.html","style.css","app.js","updater.js","manifest.json","sw.js","version.json","logo.svg","mascot.jpg" -Destination "www" -Force -ErrorAction SilentlyContinue
+    if (Test-Path "android\app\src\main\assets\public") {
+        Copy-Item -Path "index.html","style.css","app.js","updater.js","manifest.json","sw.js","version.json","logo.svg","mascot.jpg" -Destination "android\app\src\main\assets\public" -Force -ErrorAction SilentlyContinue
+    }
+}
 
 Write-Host "`n[3/6] Memastikan file APK biner & rahasia tidak ter-commit..." -ForegroundColor Yellow
 git rm --cached "Reading List.apk" 2>$null
@@ -24,11 +35,11 @@ Write-Host "`n[4/6] Menambahkan file yang aman ke Git staging..." -ForegroundCol
 git add .
 
 Write-Host "`n[5/6] Melakukan commit perubahan..." -ForegroundColor Yellow
-git commit -m "fix: github action apk build runner and cloud configuration"
+git commit -m "feat: login register auth, custom apk dropdowns, 12 folder colors and icons, responsive settings"
 
 Write-Host "`n[6/6] Melakukan sinkronisasi & push ke GitHub..." -ForegroundColor Yellow
 # Sinkronkan rebase terlebih dahulu jika ada update dari GitHub Pages bot
-git pull --rebase origin main 2>$null
+git pull --rebase origin main
 
 git push origin main
 
@@ -44,7 +55,10 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "========================================================" -ForegroundColor Green
 } else {
     Write-Host "`n========================================================" -ForegroundColor Red
-    Write-Host " [INFO] Jika muncul 'Internal Server Error', server GitHub sedang sibuk." -ForegroundColor Yellow
-    Write-Host " Tunggu 1-2 menit lalu jalankan ulang script ini." -ForegroundColor Yellow
+    Write-Host " [PERINGATAN] Push ke GitHub belum berhasil." -ForegroundColor Yellow
+    Write-Host " Periksa koneksi internet atau status kredensial git Anda." -ForegroundColor Yellow
     Write-Host "========================================================" -ForegroundColor Red
 }
+
+Write-Host ""
+Read-Host "Tekan Enter untuk menutup jendela ini"

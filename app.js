@@ -16,10 +16,15 @@
   let dbInstance = null;
 
   // Default Google Sheets URL (Bisa diisi agar APK langsung terhubung otomatis sejak pertama install)
-  const DEFAULT_GOOGLE_SHEETS_URL = '';
+  const DEFAULT_GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbzUnEBcIEdLGzFu-bBAvK61jK3X3AnTx8Sl8dh-F-SnpqyhM90rJV0mKMspf6X1vLsO/exec';
 
   const storedUserId = localStorage.getItem('reading_list_user_id') || ('user_' + Math.random().toString(36).substring(2, 7));
   localStorage.setItem('reading_list_user_id', storedUserId);
+
+  const initialSheetsUrl = localStorage.getItem('google_sheets_url') || DEFAULT_GOOGLE_SHEETS_URL || '';
+  if (!localStorage.getItem('google_sheets_url') && DEFAULT_GOOGLE_SHEETS_URL) {
+    localStorage.setItem('google_sheets_url', DEFAULT_GOOGLE_SHEETS_URL);
+  }
 
   let appState = {
     folders: [],
@@ -31,7 +36,7 @@
     },
     settings: {
       geminiApiKey: localStorage.getItem('gemini_api_key') || '',
-      googleSheetsUrl: localStorage.getItem('google_sheets_url') || DEFAULT_GOOGLE_SHEETS_URL || '',
+      googleSheetsUrl: initialSheetsUrl,
       theme: 'light'
     },
     activeFolderId: 'all',

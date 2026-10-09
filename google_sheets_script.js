@@ -26,10 +26,12 @@
 const SHEET_ITEMS = "Koleksi_Bacaan";
 const SHEET_FOLDERS = "Folder_Rak";
 const SHEET_USERS = "Pengguna_Akun";
+const SHEET_CONFIG = "Konfigurasi_Sistem";
 
-const ITEM_HEADERS = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada", "User_ID", "User_Name"];
-const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID", "Icon_Key"];
-const USER_HEADERS = ["User_ID", "Username", "Nama", "Password_Hash", "Role", "Dibuat_Pada"];
+const ITEM_HEADERS = ["ID", "Judul", "Folder_ID", "Status", "Deskripsi", "Cover_URL", "Dibuat_Pada", "User_ID", "User_Name", "Sub_Items"];
+const FOLDER_HEADERS = ["ID", "Nama_Folder", "Warna_Ikon", "User_ID", "Icon_Key", "Setup_Type"];
+const USER_HEADERS = ["User_ID", "Username", "Nama", "Password_Hash", "Role", "Dibuat_Pada", "PIN_Keamanan"];
+const CONFIG_HEADERS = ["Kunci_Pengaturan", "Nilai", "Keterangan", "Terakhir_Diubah"];
 
 // Data Bawaan Sistem (Inisialisasi Otomatis Saat Spreadsheet Masih Kosong)
 const DUMMY_FOLDERS = [
@@ -122,15 +124,83 @@ function setupDatabase() {
   const itemSheet = getOrCreateSheet(SHEET_ITEMS, ITEM_HEADERS);
   const folderSheet = getOrCreateSheet(SHEET_FOLDERS, FOLDER_HEADERS);
   const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+  const configSheet = getOrCreateSheet(SHEET_CONFIG, CONFIG_HEADERS);
 
-  // Upgrade header sheet lama jika belum memiliki kolom User_ID atau Icon_Key
+  // Upgrade header sheet lama jika belum lengkap
   upgradeSheetHeaders(itemSheet, ITEM_HEADERS);
   upgradeSheetHeaders(folderSheet, FOLDER_HEADERS);
   upgradeSheetHeaders(userSheet, USER_HEADERS);
+  upgradeSheetHeaders(configSheet, CONFIG_HEADERS);
+
+  // Inisialisasi default master password jika sheet konfigurasi kosong
+  if (configSheet.getLastRow() <= 1) {
+    configSheet.appendRow([
+      'master_password',
+      'admin123',
+      'Kata Sandi Master Menu Pengaturan APK (Dapat diganti langsung di sini)',
+      new Date().toISOString()
+    ]);
+  } else {
+    // Pastikan baris master_password ada
+    const configData = configSheet.getDataRange().getValues();
+    let hasMasterPwd = false;
+    for (let i = 1; i < configData.length; i++) {
+      if (String(configData[i][0] || '').trim().toLowerCase() === 'master_password') {
+        hasMasterPwd = true;
+        break;
+      }
+    }
+    if (!hasMasterPwd) {
+      configSheet.appendRow([
+        'master_password',
+        'admin123',
+        'Kata Sandi Master Menu Pengaturan APK (Dapat diganti langsung di sini)',
+        new Date().toISOString()
+      ]);
+    }
+  }
 
   // Jika masih kosong (hanya ada baris header), isi data awal
   if (itemSheet.getLastRow() <= 1 && folderSheet.getLastRow() <= 1) {
     saveAllData(DUMMY_FOLDERS, DUMMY_ITEMS, 'system', 'Koleksi Bawaan');
+  }
+}
+
+function getMasterPassword() {
+  try {
+    const configSheet = getOrCreateSheet(SHEET_CONFIG, CONFIG_HEADERS);
+    const data = configSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toLowerCase();
+      if (key === 'master_password') {
+        const val = String(data[i][1] || '').trim();
+        return val || 'admin123';
+      }
+    }
+  } catch (e) {
+    console.warn('Gagal membaca master_password:', e);
+  }
+  return 'admin123';
+}
+
+function updateMasterPasswordInSheet(newPassword) {
+  try {
+    const configSheet = getOrCreateSheet(SHEET_CONFIG, CONFIG_HEADERS);
+    const data = configSheet.getDataRange().getValues();
+    const cleanPwd = String(newPassword || '').trim();
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toLowerCase();
+      if (key === 'master_password') {
+        configSheet.getRange(i + 1, 2).setValue(cleanPwd);
+        configSheet.getRange(i + 1, 4).setValue(new Date().toISOString());
+        return true;
+      }
+    }
+    configSheet.appendRow(['master_password', cleanPwd, 'Kata Sandi Master Menu Pengaturan APK', new Date().toISOString()]);
+    return true;
+  } catch (e) {
+    console.warn('Gagal update master_password:', e);
+    return false;
   }
 }
 
@@ -160,6 +230,18 @@ function doGet(e) {
         message: 'Google Sheets Multi-User Database Connected Successfully',
         userId: reqUserId,
         role: reqRole,
+        masterPassword: getMasterPassword(),
+        timestamp: Date.now()
+      });
+    }
+
+    if (action === 'verify_settings_pwd') {
+      const candidate = String((e && e.parameter && e.parameter.password) || '').trim();
+      const currentMaster = getMasterPassword();
+      return createJsonResponse({
+        success: true,
+        valid: (candidate === currentMaster),
+        masterPassword: currentMaster,
         timestamp: Date.now()
       });
     }
@@ -170,6 +252,8 @@ function doGet(e) {
         success: true,
         folders: data.folders,
         items: data.items,
+        pin: data.userPin || '',
+        masterPassword: getMasterPassword(),
         reqUserId: reqUserId,
         reqRole: reqRole,
         timestamp: Date.now()
@@ -178,7 +262,8 @@ function doGet(e) {
 
     return createJsonResponse({
       success: true,
-      message: 'Reading List Multi-User API Active'
+      message: 'Reading List Multi-User API Active',
+      masterPassword: getMasterPassword()
     });
   } catch (err) {
     return createJsonResponse({
@@ -266,9 +351,79 @@ function doPost(e) {
       return createJsonResponse({ success: false, error: 'Akun dengan username tersebut belum terdaftar. Silakan pilih tab Daftar Akun.' });
     }
 
+    // =========================================================================
+    // MASTER PASSWORD PENGATURAN APK (KONFIGURASI GLOBAL SPREADSHEET)
+    // =========================================================================
+    if (action === 'verify_settings_pwd') {
+      const candidate = String(body.password || '').trim();
+      const currentMaster = getMasterPassword();
+      return createJsonResponse({
+        success: true,
+        valid: (candidate === currentMaster),
+        masterPassword: currentMaster,
+        timestamp: Date.now()
+      });
+    }
+
+    if (action === 'update_master_password') {
+      const newPwd = String(body.password || '').trim();
+      if (!newPwd) {
+        return createJsonResponse({ success: false, error: 'Kata sandi master baru tidak boleh kosong.' });
+      }
+      updateMasterPasswordInSheet(newPwd);
+      return createJsonResponse({
+        success: true,
+        message: 'Kata sandi master berhasil diubah di Google Sheet!',
+        masterPassword: newPwd,
+        timestamp: Date.now()
+      });
+    }
+
+    if (action === 'update_pin') {
+      const pinVal = String(body.pin || '').trim();
+      const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+      const userData = userSheet.getDataRange().getValues();
+      let updated = false;
+
+      for (let i = 1; i < userData.length; i++) {
+        const rowUid = String(userData[i][0] || '').trim();
+        if (rowUid === userId || (!rowUid && userData[i][1] === userName)) {
+          // Pastikan baris memiliki kolom ke-7 (PIN_Keamanan)
+          userSheet.getRange(i + 1, 7).setValue(pinVal);
+          updated = true;
+          break;
+        }
+      }
+
+      return createJsonResponse({
+        success: true,
+        message: 'PIN Keamanan berhasil diperbarui di Google Sheet!',
+        pin: pinVal,
+        timestamp: Date.now()
+      });
+    }
+
     if (action === 'save_all') {
       const folders = body.folders || [];
       const items = body.items || [];
+      const pinVal = body.pin !== undefined ? String(body.pin).trim() : null;
+
+      if (pinVal !== null && userId) {
+        try {
+          const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+          const userData = userSheet.getDataRange().getValues();
+          for (let i = 1; i < userData.length; i++) {
+            const rowUid = String(userData[i][0] || '').trim();
+            if (rowUid === userId) {
+              userSheet.getRange(i + 1, 7).setValue(pinVal);
+              break;
+            }
+          }
+        } catch (e) {
+          console.warn('Gagal sinkron PIN ke userSheet:', e);
+        }
+      }
+
       const result = saveAllData(folders, items, userId, userName);
       return createJsonResponse({
         success: true,
@@ -369,6 +524,7 @@ function getAllData(reqUserId, reqRole) {
       name: name,
       color: color,
       icon: (row.length > 4 && row[4]) ? String(row[4]).trim() : (color || 'book'),
+      setupType: (row.length > 5 && row[5]) ? String(row[5]).trim() : 'visual',
       userId: folderUserId
     };
     folders.push(folderObj);
@@ -390,6 +546,7 @@ function getAllData(reqUserId, reqRole) {
     let idxDate = headerRow.findIndex(h => h.includes('dibuat') || h.includes('created') || h.includes('tanggal') || h.includes('waktu'));
     let idxUserId = headerRow.findIndex(h => h.includes('user_id') || h.includes('userid') || h.includes('pemilik'));
     let idxUserName = headerRow.findIndex(h => h.includes('user_name') || h.includes('username') || h.includes('pengguna'));
+    let idxSubItems = headerRow.findIndex(h => h.includes('sub_items') || h.includes('subitems') || h.includes('bumbu') || h.includes('bahan'));
 
     if (idxId === -1) idxId = 0;
     if (idxTitle === -1) idxTitle = 1;
@@ -412,6 +569,14 @@ function getAllData(reqUserId, reqRole) {
       let rawDate = row[idxDate] ? Number(row[idxDate]) : Date.now();
       let rowUserId = (idxUserId < row.length) ? String(row[idxUserId] || '').trim() : '';
       let rowUserName = (idxUserName < row.length) ? String(row[idxUserName] || '').trim() : '';
+      let rawSubItems = [];
+      if (idxSubItems !== -1 && idxSubItems < row.length && row[idxSubItems]) {
+        try {
+          rawSubItems = JSON.parse(String(row[idxSubItems]));
+        } catch (e) {
+          rawSubItems = [];
+        }
+      }
 
       // Abaikan baris kosong
       if (!rawTitle && !rawDesc) continue;
@@ -454,6 +619,7 @@ function getAllData(reqUserId, reqRole) {
         status: rawStatus,
         desc: rawDesc,
         coverUrl: rawCover,
+        subItems: Array.isArray(rawSubItems) ? rawSubItems : [],
         createdAt: isNaN(rawDate) ? Date.now() : rawDate,
         userId: rowUserId || reqUserId || '',
         userName: rowUserName || (rowUserId === 'system' ? 'Koleksi Bawaan' : '')
@@ -461,7 +627,26 @@ function getAllData(reqUserId, reqRole) {
     }
   }
 
-  return { folders, items };
+  // 3. Baca PIN Keamanan Pengguna jika ada
+  let userPin = '';
+  try {
+    const userSheet = getOrCreateSheet(SHEET_USERS, USER_HEADERS);
+    const userData = userSheet.getDataRange().getValues();
+    for (let i = 1; i < userData.length; i++) {
+      const rowUid = String(userData[i][0] || '').trim();
+      const rowUname = String(userData[i][1] || '').trim().toLowerCase();
+      if ((reqUserId && rowUid === reqUserId) || (reqUserId && rowUname === reqUserId.toLowerCase())) {
+        if (userData[i].length > 6 && userData[i][6] !== undefined && userData[i][6] !== '') {
+          userPin = String(userData[i][6]).trim();
+        }
+        break;
+      }
+    }
+  } catch (e) {
+    console.warn('Gagal membaca PIN dari userSheet:', e);
+  }
+
+  return { folders, items, userPin };
 }
 
 /**
@@ -491,7 +676,8 @@ function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserN
 
     // Jika folder ini milik pengguna LAIN, pertahankan!
     if (rowUserId && currentUserId && rowUserId !== currentUserId && rowUserId !== 'system') {
-      preservedFolders.push([rowId, rowName, rowColor, rowUserId, rowIcon]);
+      const rowSetup = (row.length > 5 && row[5]) ? String(row[5]).trim() : 'visual';
+      preservedFolders.push([rowId, rowName, rowColor, rowUserId, rowIcon, rowSetup]);
     }
   }
 
@@ -501,7 +687,8 @@ function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserN
     f.name,
     f.color || 'book',
     currentUserId || f.userId || '',
-    f.icon || f.color || 'book'
+    f.icon || f.color || 'book',
+    f.setupType || 'visual'
   ]);
 
   const finalFolderRows = [...preservedFolders, ...userFolderRows];
@@ -547,7 +734,8 @@ function saveAllData(incomingFolders, incomingItems, currentUserId, currentUserN
     it.coverUrl || '',
     it.createdAt || Date.now(),
     currentUserId || it.userId || '',
-    currentUserName || it.userName || ''
+    currentUserName || it.userName || '',
+    JSON.stringify(it.subItems || [])
   ]);
 
   const finalItemRows = [...preservedItems, ...userItemRows];

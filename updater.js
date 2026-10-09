@@ -6,12 +6,13 @@
 (function () {
   'use strict';
 
-  const LOCAL_VERSION = '1.2.0';
-  const LOCAL_VERSION_CODE = 4;
+  const LOCAL_VERSION = '1.3.0';
+  const LOCAL_VERSION_CODE = 5;
   const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/appcraft1/reading-list/main/version.json';
 
   async function checkAppUpdates() {
     try {
+      if (window.location.protocol === 'file:') return;
       // 1. Cek langsung ke GitHub Raw untuk mengetahui update rilis cloud terbaru
       let response = await fetch(REMOTE_VERSION_URL + '?t=' + Date.now()).catch(() => null);
       if (!response || !response.ok) {

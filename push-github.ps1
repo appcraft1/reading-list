@@ -35,7 +35,7 @@ Write-Host "`n[4/6] Menambahkan file yang aman ke Git staging..." -ForegroundCol
 git add .
 
 Write-Host "`n[5/6] Melakukan commit perubahan..." -ForegroundColor Yellow
-git commit -m "feat: login register auth, custom apk dropdowns, 12 folder colors and icons, responsive settings"
+git commit -m "feat: cute & clean UI revamp with Bento Rak Hub, 1-tap Pure Checklist, streamlined modal, and PIN security with Google Sheets sync"
 
 Write-Host "`n[6/6] Melakukan sinkronisasi & push ke GitHub..." -ForegroundColor Yellow
 # Sinkronkan rebase terlebih dahulu jika ada update dari GitHub Pages bot

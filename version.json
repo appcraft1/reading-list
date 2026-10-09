@@ -1,7 +1,8 @@
 {
-  "version": "1.2.0",
-  "versionCode": 4,
+  "version": "1.3.0",
+  "versionCode": 5,
   "appName": "Reading List",
-  "changeLog": "Pembaruan v1.2.0: Failsafe Splash Screen Instan, Sistem Multi-Akun & Login Terpisah 1 Database, 12 Warna & Ikon Rak, Perbaikan Compile APK.",
+  "changeLog": "Pembaruan v1.3.0: Desain Imut & Ceria, Beranda Bento Rak Hub, Mode 1-Tap Pure Checklist, PIN Keamanan Pengaturan & Sync Google Sheets.",
   "updateType": "ota"
 }
+

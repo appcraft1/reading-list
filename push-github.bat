@@ -54,7 +54,7 @@ echo [OK] Seluruh berkas siap di-commit.
 echo.
 
 echo [5/6] Melakukan commit perubahan...
-git commit -m "fix: auto-dismiss splash screen failsafe and fix github actions apk compile workflow"
+git commit -m "feat: cute & clean UI revamp with Bento Rak Hub, 1-tap Pure Checklist, streamlined modal, and PIN security with Google Sheets sync"
 if %errorlevel% neq 0 (
     echo [INFO] Tidak ada perubahan baru atau commit sudah dibuat sebelumnya.
 )

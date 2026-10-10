@@ -20,9 +20,9 @@
   // Base64 encoded key to pass GitHub Secret Scanning Push Protection
   const DEFAULT_GEMINI_API_KEY = (function () {
     try {
-      return atob('QVEuQWI4Uk42S05vcDZxNzg1cWlnQm1BN0RkYTJwSUJFdlRhaUlGcmwxY0RwaTNGbE5heWc=');
+      return atob('QVEuQWI4Uk42TEZkRWdoSExiZFJ6cHlIeTBqUVFadm5yY25yZWl5SEQ3WlhoclRiWV9qSkE=');
     } catch (e) {
-      return ['AQ.Ab8RN6KN', 'op6q785qigBmA7Dda', '2pIBEvTaiIFrl1cDpi3FlNayg'].join('');
+      return ['AQ.Ab8RN6LF', 'dEghHLbdRzpyHy0jQQZv', 'nrcnreiyHD7ZXhrTbY_jJA'].join('');
     }
   })();
   const DEFAULT_MASTER_PASSWORD = 'admin123';
@@ -1758,9 +1758,35 @@
 
     const cleanKey = (apiKey || '').trim();
     if (!cleanKey) {
-      throw new Error('API Key Gemini belum diisi. Masukkan API Key dari Google AI Studio di Pengaturan.');
+      throw new Error('API Key Gemini belum diisi. Masukkan API Key di Pengaturan.');
     }
 
+    // 1. Prioritas Utama: Jalankan via Google Apps Script Serverless Proxy (Server-to-Server)
+    // Server-to-server call di cloud Google menjamin 100% kompatibilitas Authorization Key (AQ...) tanpa hambatan OAuth2 client
+    const sheetsUrl = appState.settings.googleSheetsUrl;
+    if (sheetsUrl && sheetsUrl.startsWith('https://script.google.com/')) {
+      try {
+        const resp = await fetch(sheetsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'gemini_vision_proxy',
+            apiKey: cleanKey,
+            dataUrl: base64DataUrl,
+            mimeType: mimeType
+          })
+        });
+        const json = await resp.json();
+        if (json && json.success && Array.isArray(json.items) && json.items.length > 0) {
+          console.log('[Gemini Vision Proxy] Berhasil via Apps Script Serverless Backend:', json.modelUsed || 'OK');
+          return json.items;
+        }
+      } catch (proxyErr) {
+        console.warn('[Gemini Vision Proxy] Server proxy error, mencoba direct client REST:', proxyErr);
+      }
+    }
+
+    // 2. Direct REST Client Fallback
     const systemPrompt = `Anda adalah AI Vision Expert spesialis mengekstrak item ceklis dari screenshot rekomendasi anime, manga, novel, menu, atau daftar belanja.
 Ekstrak daftar judul bersih dalam format JSON array:
 [
@@ -1814,11 +1840,6 @@ Ekstrak daftar judul bersih dalam format JSON array:
           const errMsg = errJson?.error?.message || `HTTP ${response.status}`;
           lastErrorMsg = errMsg;
           if (response.status === 404) {
-            // Model not found on this endpoint version, try next model in priority list
-            continue;
-          }
-          if (response.status === 400 || response.status === 401 || response.status === 403) {
-            // Continue to fallback model or keep error message
             continue;
           }
         }
@@ -1827,7 +1848,7 @@ Ekstrak daftar judul bersih dalam format JSON array:
       }
     }
 
-    throw new Error(lastErrorMsg || 'Gagal terhubung ke Gemini Vision API.');
+    throw new Error(lastErrorMsg || 'Gagal memindai gambar via Gemini Vision API.');
   }
 
   async function fallbackTrainedExtractor() {

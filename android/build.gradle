@@ -17,11 +17,15 @@ buildscript {
 
 apply from: "variables.gradle"
 
+def localBuildDir = new File(System.getProperty("user.home"), ".gradle-builds/reading-list")
+
 allprojects {
     repositories {
         google()
         mavenCentral()
     }
+    // Arahkan seluruh output build keluar dari OneDrive ke folder lokal cepat (Bebas lock OneDrive)
+    layout.buildDirectory.set(new File(localBuildDir, project.name))
 }
 
 task clean(type: Delete) {

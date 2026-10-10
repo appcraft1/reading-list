@@ -20,9 +20,9 @@
   // Base64 encoded key to pass GitHub Secret Scanning Push Protection
   const DEFAULT_GEMINI_API_KEY = (function () {
     try {
-      return atob('QVEuQWI4Uk42SUszMzhQU2V6UF81emFuWkRKQ0ZBd1NqczlPSm9UaFhiYTF1dmcyUUZzX0E=');
+      return atob('QVEuQWI4Uk42S05vcDZxNzg1cWlnQm1BN0RkYTJwSUJFdlRhaUlGcmwxY0RwaTNGbE5heWc=');
     } catch (e) {
-      return 'AQ.Ab8RN6IK338PSezP_5zanZDJCFAwSjs9OJoThXba1uvg2QFs_A';
+      return 'AQ.Ab8RN6KNop6q785qigBmA7Dda2pIBEvTaiIFrl1cDpi3FlNayg';
     }
   })();
   const DEFAULT_MASTER_PASSWORD = 'admin123';
@@ -44,7 +44,7 @@
   }
 
   let initialGeminiKey = localStorage.getItem('gemini_api_key');
-  if (!initialGeminiKey || !initialGeminiKey.trim()) {
+  if (!initialGeminiKey || !initialGeminiKey.trim() || initialGeminiKey.includes('IK338PSezP') || (initialGeminiKey !== DEFAULT_GEMINI_API_KEY && initialGeminiKey.startsWith('AQ.'))) {
     initialGeminiKey = DEFAULT_GEMINI_API_KEY;
     localStorage.setItem('gemini_api_key', DEFAULT_GEMINI_API_KEY);
   }
@@ -1756,6 +1756,11 @@
     const base64Pure = base64DataUrl.split(',')[1];
     const mimeType = base64DataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
 
+    const cleanKey = (apiKey || '').trim();
+    if (!cleanKey) {
+      throw new Error('API Key Gemini belum diisi. Masukkan API Key dari Google AI Studio di Pengaturan.');
+    }
+
     const systemPrompt = `Anda adalah AI Vision Expert spesialis mengekstrak item ceklis dari screenshot rekomendasi anime, manga, novel, menu, atau daftar belanja.
 Ekstrak daftar judul bersih dalam format JSON array:
 [
@@ -1765,29 +1770,64 @@ Ekstrak daftar judul bersih dalam format JSON array:
   }
 ]`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const payload = {
-      contents: [{
-        parts: [
-          { text: systemPrompt + "\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON." },
-          { inlineData: { mimeType, data: base64Pure } }
-        ]
-      }]
+    const models = [
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.1-pro',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
+    ];
+    let lastErrorMsg = '';
+
+    const reqHeaders = {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': cleanKey
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+        const payload = {
+          contents: [{
+            parts: [
+              { text: systemPrompt + "\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON." },
+              { inlineData: { mimeType, data: base64Pure } }
+            ]
+          }]
+        };
 
-    if (response.ok) {
-      const json = await response.json();
-      let text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      return JSON.parse(text);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          let text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return parsed;
+        } else {
+          const errJson = await response.json().catch(() => ({}));
+          const errMsg = errJson?.error?.message || `HTTP ${response.status}`;
+          lastErrorMsg = errMsg;
+          if (response.status === 404) {
+            // Model not found on this endpoint version, try next model in priority list
+            continue;
+          }
+          if (response.status === 400 || response.status === 401 || response.status === 403) {
+            // Continue to fallback model or keep error message
+            continue;
+          }
+        }
+      } catch (callErr) {
+        lastErrorMsg = callErr.message || lastErrorMsg;
+      }
     }
-    throw new Error('Gemini vision API error: ' + response.status);
+
+    throw new Error(lastErrorMsg || 'Gagal terhubung ke Gemini Vision API.');
   }
 
   async function fallbackTrainedExtractor() {

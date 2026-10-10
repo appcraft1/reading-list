@@ -41,16 +41,24 @@ assets.forEach(asset => {
 
 // 5. Sinkronisasi langsung ke assets Android jika folder android ada
 const androidAssetsDir = path.join(rootDir, 'android', 'app', 'src', 'main', 'assets', 'public');
-if (fs.existsSync(androidAssetsDir)) {
+if (fs.existsSync(path.join(rootDir, 'android'))) {
+  try {
+    if (fs.existsSync(androidAssetsDir)) {
+      fs.rmSync(androidAssetsDir, { recursive: true, force: true });
+    }
+  } catch(e) {}
+  fs.mkdirSync(androidAssetsDir, { recursive: true });
+
   const allFiles = ['index.html', 'style.css', 'app.js', 'updater.js', 'manifest.json', 'sw.js', 'version.json', 'logo.svg', 'mascot.jpg'];
   allFiles.forEach(file => {
     const src = path.join(wwwDir, file);
     const dest = path.join(androidAssetsDir, file);
     if (fs.existsSync(src)) {
-      fs.copyFileSync(src, dest);
+      const buf = fs.readFileSync(src);
+      fs.writeFileSync(dest, buf);
     }
   });
-  console.log('✅ Aset Android native (/assets/public/) berhasil disinkronkan!');
+  console.log('✅ Aset Android native (/assets/public/) dibuat ulang sebagai berkas fisik bersih!');
 }
 
 console.log('\n🎉 Selesai! Seluruh aset siap untuk dijalankan lokal atau dikompilasi jadi APK.');

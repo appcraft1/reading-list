@@ -52,15 +52,13 @@ if (Test-Path (Join-Path $rootDir "android")) {
         $bmp.Save((Join-Path $targetDir "ic_launcher_round.png"), [System.Drawing.Imaging.ImageFormat]::Png)
         $bmp.Dispose()
 
-        # 2. Adaptive Foreground Icon (12% padding)
+        # 2. Adaptive Foreground Icon (Full Bleed High Definition)
         $fgBmp = New-Object System.Drawing.Bitmap $size, $size
         $gFg = [System.Drawing.Graphics]::FromImage($fgBmp)
         $gFg.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
         $gFg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-        
-        $pad = [int]($size * 0.12)
-        $innerSize = $size - ($pad * 2)
-        $gFg.DrawImage($srcImg, $pad, $pad, $innerSize, $innerSize)
+        $gFg.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $gFg.DrawImage($srcImg, 0, 0, $size, $size)
         $gFg.Dispose()
 
         $fgBmp.Save((Join-Path $targetDir "ic_launcher_foreground.png"), [System.Drawing.Imaging.ImageFormat]::Png)

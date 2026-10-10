@@ -1439,6 +1439,44 @@
     }
   }
 
+  async function compressImageFileToDataUrl(file, maxDimension = 1280, quality = 0.85) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const rawDataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDimension || height > maxDimension) {
+              if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressed);
+          } catch (err) {
+            resolve(rawDataUrl);
+          }
+        };
+        img.onerror = () => resolve(rawDataUrl);
+        img.src = rawDataUrl;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  }
+
   async function handleUploadedScreenshots(fileList) {
     const rawFiles = Array.from(fileList).filter(f => f && f.type && f.type.startsWith('image/'));
     if (rawFiles.length === 0) {
@@ -1455,11 +1493,7 @@
 
     for (let i = 0; i < rawFiles.length; i++) {
       const file = rawFiles[i];
-      const dataUrl = await new Promise(res => {
-        const reader = new FileReader();
-        reader.onload = e => res(e.target.result);
-        reader.readAsDataURL(file);
-      });
+      const dataUrl = await compressImageFileToDataUrl(file);
 
       const job = {
         id: 'scan-' + Date.now() + '-' + i + '-' + Math.random().toString(36).substr(2, 4),
@@ -1753,8 +1787,10 @@
   }
 
   async function callGemini38FlashVision(base64DataUrl, apiKey) {
-    const base64Pure = base64DataUrl.split(',')[1];
-    const mimeType = base64DataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+    const base64Pure = base64DataUrl.includes(',') ? base64DataUrl.split(',')[1] : base64DataUrl;
+    const mimeType = (base64DataUrl.includes(';') && base64DataUrl.includes(':'))
+      ? base64DataUrl.split(';')[0].split(':')[1]
+      : 'image/jpeg';
 
     const cleanKey = (apiKey || '').trim();
     if (!cleanKey) {
@@ -1762,8 +1798,8 @@
     }
 
     // 1. Prioritas Utama: Jalankan via Google Apps Script Serverless Proxy (Server-to-Server)
-    // Server-to-server call di cloud Google menjamin 100% kompatibilitas Authorization Key (AQ...) tanpa hambatan OAuth2 client
     const sheetsUrl = appState.settings.googleSheetsUrl;
+    let proxyError = '';
     if (sheetsUrl && sheetsUrl.startsWith('https://script.google.com/')) {
       try {
         const resp = await fetch(sheetsUrl, {
@@ -1780,13 +1816,17 @@
         if (json && json.success && Array.isArray(json.items) && json.items.length > 0) {
           console.log('[Gemini Vision Proxy] Berhasil via Apps Script Serverless Backend:', json.modelUsed || 'OK');
           return json.items;
+        } else if (json && json.error) {
+          proxyError = json.error;
+          console.warn('[Gemini Vision Proxy] Server proxy error:', json.error);
         }
       } catch (proxyErr) {
-        console.warn('[Gemini Vision Proxy] Server proxy error, mencoba direct client REST:', proxyErr);
+        proxyError = proxyErr.message || String(proxyErr);
+        console.warn('[Gemini Vision Proxy] Gagal fetch ke Apps Script:', proxyErr);
       }
     }
 
-    // 2. Direct REST Client Fallback
+    // 2. Direct REST Client Fallback (Google Generative Language API)
     const systemPrompt = `Anda adalah AI Vision Expert spesialis mengekstrak item ceklis dari screenshot rekomendasi anime, manga, novel, menu, atau daftar belanja.
 Ekstrak daftar judul bersih dalam format JSON array:
 [
@@ -1801,50 +1841,62 @@ Ekstrak daftar judul bersih dalam format JSON array:
       'gemini-3.7-flash',
       'gemini-3.6-flash',
       'gemini-3.1-pro',
+      'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash'
     ];
-    let lastErrorMsg = '';
+    let lastErrorMsg = proxyError || '';
 
-    const reqHeaders = {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': cleanKey
+    const payload = {
+      contents: [{
+        parts: [
+          { text: systemPrompt + "\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON." },
+          { inlineData: { mimeType, data: base64Pure } }
+        ]
+      }]
     };
 
     for (const model of models) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`;
-        const payload = {
-          contents: [{
-            parts: [
-              { text: systemPrompt + "\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON." },
-              { inlineData: { mimeType, data: base64Pure } }
-            ]
-          }]
-        };
-
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: reqHeaders,
-          body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-          const json = await response.json();
-          let text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed)) return parsed;
-        } else {
-          const errJson = await response.json().catch(() => ({}));
-          const errMsg = errJson?.error?.message || `HTTP ${response.status}`;
-          lastErrorMsg = errMsg;
-          if (response.status === 404) {
-            continue;
+      // Mode 1: Header x-goog-api-key TANPA ?key= di URL (Resmi Google untuk Authorization Key)
+      // Mode 2: Query param ?key= TANPA header x-goog-api-key (Legacy Key)
+      const attempts = [
+        {
+          url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': cleanKey
+          }
+        },
+        {
+          url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cleanKey)}`,
+          headers: {
+            'Content-Type': 'application/json'
           }
         }
-      } catch (callErr) {
-        lastErrorMsg = callErr.message || lastErrorMsg;
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          const response = await fetch(attempt.url, {
+            method: 'POST',
+            headers: attempt.headers,
+            body: JSON.stringify(payload)
+          });
+
+          if (response.ok) {
+            const json = await response.json();
+            let text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            text = text.replace(/```json/gi, '').replace(/```/gi, '').trim();
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } else {
+            const errJson = await response.json().catch(() => ({}));
+            const errMsg = errJson?.error?.message || `HTTP ${response.status}`;
+            lastErrorMsg = errMsg;
+          }
+        } catch (callErr) {
+          lastErrorMsg = callErr.message || lastErrorMsg;
+        }
       }
     }
 

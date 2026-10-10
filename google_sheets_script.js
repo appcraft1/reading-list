@@ -307,6 +307,7 @@ function doPost(e) {
         'gemini-3.7-flash',
         'gemini-3.6-flash',
         'gemini-3.1-pro',
+        'gemini-2.5-flash',
         'gemini-2.0-flash',
         'gemini-1.5-flash'
       ];
@@ -314,42 +315,58 @@ function doPost(e) {
       let lastError = '';
       for (let m = 0; m < models.length; m++) {
         const modelName = models[m];
-        try {
-          const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + encodeURIComponent(apiKey);
-          const payload = {
-            contents: [{
-              parts: [
-                { text: systemPrompt + '\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON.' },
-                { inlineData: { mimeType: mimeType, data: base64Pure } }
-              ]
-            }]
-          };
-
-          const options = {
-            method: 'post',
-            contentType: 'application/json',
-            payload: JSON.stringify(payload),
-            headers: {
-              'x-goog-api-key': apiKey
-            },
-            muteHttpExceptions: true
-          };
-
-          const res = UrlFetchApp.fetch(url, options);
-          const code = res.getResponseCode();
-          const textRes = res.getContentText();
-
-          if (code === 200) {
-            const parsedRes = JSON.parse(textRes);
-            let rawText = (parsedRes.candidates && parsedRes.candidates[0] && parsedRes.candidates[0].content && parsedRes.candidates[0].content.parts && parsedRes.candidates[0].content.parts[0] && parsedRes.candidates[0].content.parts[0].text) || '';
-            rawText = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();
-            const items = JSON.parse(rawText);
-            return createJsonResponse({ success: true, items: items, modelUsed: modelName });
-          } else {
-            lastError = 'HTTP ' + code + ': ' + textRes;
+        
+        // Mode 1: Header x-goog-api-key (Standar Google untuk AQ. Authorization Key)
+        // Mode 2: Query param ?key= (Standar legacy untuk AIza API Key)
+        const authConfigs = [
+          {
+            url: 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent',
+            headers: { 'x-goog-api-key': apiKey }
+          },
+          {
+            url: 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + encodeURIComponent(apiKey),
+            headers: {}
           }
-        } catch (fetchErr) {
-          lastError = fetchErr.toString();
+        ];
+
+        for (let a = 0; a < authConfigs.length; a++) {
+          try {
+            const conf = authConfigs[a];
+            const payload = {
+              contents: [{
+                parts: [
+                  { text: systemPrompt + '\n\nEkstrak seluruh item dari screenshot ini ke dalam format JSON.' },
+                  { inlineData: { mimeType: mimeType, data: base64Pure } }
+                ]
+              }]
+            };
+
+            const options = {
+              method: 'post',
+              contentType: 'application/json',
+              payload: JSON.stringify(payload),
+              headers: conf.headers,
+              muteHttpExceptions: true
+            };
+
+            const res = UrlFetchApp.fetch(conf.url, options);
+            const code = res.getResponseCode();
+            const textRes = res.getContentText();
+
+            if (code === 200) {
+              const parsedRes = JSON.parse(textRes);
+              let rawText = (parsedRes.candidates && parsedRes.candidates[0] && parsedRes.candidates[0].content && parsedRes.candidates[0].content.parts && parsedRes.candidates[0].content.parts[0] && parsedRes.candidates[0].content.parts[0].text) || '';
+              rawText = rawText.replace(/```json/gi, '').replace(/```/gi, '').trim();
+              const items = JSON.parse(rawText);
+              if (Array.isArray(items) && items.length > 0) {
+                return createJsonResponse({ success: true, items: items, modelUsed: modelName });
+              }
+            } else {
+              lastError = 'HTTP ' + code + ': ' + textRes;
+            }
+          } catch (fetchErr) {
+            lastError = fetchErr.toString();
+          }
         }
       }
 

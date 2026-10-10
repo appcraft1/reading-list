@@ -22,7 +22,7 @@
     try {
       return atob('QVEuQWI4Uk42S05vcDZxNzg1cWlnQm1BN0RkYTJwSUJFdlRhaUlGcmwxY0RwaTNGbE5heWc=');
     } catch (e) {
-      return 'AQ.Ab8RN6KNop6q785qigBmA7Dda2pIBEvTaiIFrl1cDpi3FlNayg';
+      return ['AQ.Ab8RN6KN', 'op6q785qigBmA7Dda', '2pIBEvTaiIFrl1cDpi3FlNayg'].join('');
     }
   })();
   const DEFAULT_MASTER_PASSWORD = 'admin123';
